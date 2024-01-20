@@ -1,6 +1,8 @@
 # LANTransfer
 This project allows users to transfer files over a network.
+
 User A - Recieve File
+
 User B - Send File
 
 Steps:
