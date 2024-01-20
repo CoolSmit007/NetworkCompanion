@@ -33,3 +33,5 @@ A.6) Accept file according to name and size displayed on popup.
 A.7) Wait for file to be recieved.
 
 B.6) Wait for file to be sent.
+
+(Note: Avoid virus warning by AntiVirus completely safe to use. It is flagged as virus due to latest PyInstaller library of Python)
