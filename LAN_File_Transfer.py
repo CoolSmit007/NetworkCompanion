@@ -2,7 +2,6 @@ import tkinter as tk
 from tkinter import ttk
 import os
 from tkinter.filedialog import askopenfilename
-from tktooltip import ToolTip
 import socket
 import select
 import threading as th
@@ -127,7 +126,6 @@ def file_send():
             sent+=len(data)
             file_send_progressbar['value']=int((sent/totalsize)*100)
             percentage_label["text"]=str(int((sent/totalsize)*100))+"%"
-        print("Sending EOF")
         select.select([],[skt.fileno()],[])
         skt.sendall("<<EOF>>".encode())
         select.select([skt.fileno()],[],[])
@@ -142,6 +140,7 @@ def file_send():
 # File Recieve Function
 def file_recieve(initialdata):
     global filename,sending_queue,ack_counter_send,file_directory,file,folder_sending
+    first_time=True
     if folder_sending:
         ack_counter_send=0
         size=filename.split("\n")[1]
@@ -170,12 +169,19 @@ def file_recieve(initialdata):
                     temp_file_directory=os.path.join(file_directory,data.decode())
                 else:
                     temp_file_directory=file_directory
-            sending_queue.put("<<ACK>>".encode())
+            if first_time:
+                file_send_event.clear()
+                sending_queue.put("<<ACK>>".encode())
+                first_time=False
+            else:
+                select.select([],[skt.fileno()],[])
+                skt.sendall("<<ACK>>".encode())
             select.select([skt.fileno()],[],[])
             data=skt.recv(recieve_size).decode()
             file=open(temp_file_directory+"/"+data.split('\n')[0],"wb")
             temp_sizeoffile=int(data.split('\n')[1][1:-7])
-            sending_queue.put("<<ACK>>".encode())
+            select.select([],[skt.fileno()],[])
+            skt.sendall("<<ACK>>".encode())
             while temp_sizeoffile:
                 select.select([skt.fileno()],[],[])
                 data=skt.recv(min(recieve_size,temp_sizeoffile))
@@ -187,17 +193,20 @@ def file_recieve(initialdata):
                     file_send_progressbar['value']=int(((totalsize-size)/(totalsize))*100)
                     percentage_label["text"]=str(int(((totalsize-size)/(totalsize))*100))+"%"
                     if ack_counter_send==100:
-                        sending_queue.put("<<ACK>>".encode())
+                        select.select([],[skt.fileno()],[])
+                        skt.sendall("<<ACK>>".encode())
                         ack_counter_send=0
             select.select([skt.fileno()],[],[])
             data=skt.recv(recieve_size)
             if data.decode()=="<<EOF>>":
-                sending_queue.put("<<ACK>>".encode())
+                select.select([],[skt.fileno()],[])
+                skt.sendall("<<ACK>>".encode())
             file.close()
         folder_sending=False
         pendingconfirmation_label["text"]="Folder Recieved"
         popup_file.protocol("WM_DELETE_WINDOW",lambda: destroy(popup_file))
         file_status["text"]="Status: Folder Recieved Succesfully"
+        file_send_event.set()
     else:
         ack_counter_send=0
         size=filename.split("\n")[1]
@@ -223,17 +232,24 @@ def file_recieve(initialdata):
                 file_send_progressbar['value']=int(((totalsize-size)/(totalsize))*100)
                 percentage_label["text"]=str(int(((totalsize-size)/(totalsize))*100))+"%"
                 if ack_counter_send==100:
-                    sending_queue.put("<<ACK>>".encode())
+                    if first_time:
+                        file_send_event.clear()
+                        sending_queue.put("<<ACK>>".encode())
+                        first_time=False
+                    else:
+                        select.select([],[skt.fileno()],[])
+                        skt.sendall("<<ACK>>".encode())
                     ack_counter_send=0
-        print("waiting for EOF")
         select.select([skt.fileno()],[],[])
         data=skt.recv(recieve_size)
         if data.decode()=="<<EOF>>":
-            sending_queue.put("<<ACK>>".encode())
+            select.select([],[skt.fileno()],[])
+            skt.sendall("<<ACK>>".encode())
         file.close()
         pendingconfirmation_label["text"]="File Recieved"
         popup_file.protocol("WM_DELETE_WINDOW",lambda: destroy(popup_file))
         file_status["text"]="Status: File Recieved Succesfully"
+        file_send_event.set()
     return
 def rejectfile(dropdown_var):
     global pendingconfirmation_label,popup_file,folder_sending
@@ -416,7 +432,6 @@ ip2=tk.Entry(base,textvariable=ip2_var,width=9,justify="center",validate="all",v
 ip3=tk.Entry(base,textvariable=ip3_var,width=9,justify="center",validate="all",validatecommand=(validateipreg,'%P'),state="disabled")
 ip4=tk.Entry(base,textvariable=ip4_var,width=9,justify="center",validate="all",validatecommand=(validateipreg,'%P'),state="disabled")
 port=tk.Entry(base,textvariable=port_var,width=15,justify="center",validate="all",validatecommand=(validateportreg,'%P'),state="disabled")
-ToolTip(port,'Value Between 1024-49151')
 fullstop=[tk.Label(base,text='.'),tk.Label(base,text='.'),tk.Label(base,text='.')]
 colon=tk.Label(base,text=':')
 connect_start_var=tk.StringVar(value="Connect")
