@@ -68,16 +68,20 @@ def file_send():
                         skt.sendall("<<NODIR>>".encode())
                     else:
                         skt.sendall(path.split('\\',1)[1].encode())
+                # print("Sent Directory")
                 select.select([skt.fileno()],[],[])
-                check_ack_recv=skt.recv(recieve_size)
+                check_ack_recv=skt.recv(7)
                 if check_ack_recv.decode()!="<<ACK>>":
-                    print("error")
+                    print("error-"+check_ack_recv.decode())
+                # print("Recieved ACK")
                 select.select([],[skt.fileno()],[])
                 skt.sendall((f+'\n('+str(size)+' Bytes)').encode())
+                # print("Sent Filename")
                 select.select([skt.fileno()],[],[])
-                check_ack_recv=skt.recv(recieve_size)
+                check_ack_recv=skt.recv(7)
                 if check_ack_recv.decode()!="<<ACK>>":
-                    print("error")
+                    print("error-"+check_ack_recv.decode())
+                # print("Recieved ACK")
                 while data:=file.read(send_size):
                     select.select([],[skt.fileno()],[])
                     skt.sendall(data)
@@ -87,16 +91,18 @@ def file_send():
                     percentage_label["text"]=str(int((sent/totalsize)*100))+"%"
                     if ack_counter_send==100:
                         select.select([skt.fileno()],[],[])
-                        check_ack_recv=skt.recv(recieve_size)
+                        check_ack_recv=skt.recv(7)
                         if check_ack_recv.decode()!="<<ACK>>":
-                            print("error")
+                            print("error-"+check_ack_recv.decode())
                         ack_counter_send=0
                 select.select([],[skt.fileno()],[])
                 skt.sendall("<<EOF>>".encode())
+                # print("Sent EOF")
                 select.select([skt.fileno()],[],[])
-                check_ack_recv=skt.recv(recieve_size)
+                check_ack_recv=skt.recv(7)
                 if check_ack_recv.decode()!="<<ACK>>":
-                    print("error")
+                    print("error-"+check_ack_recv.decode())
+                # print("Recieved ACK")
                 file.close()
         pendingconfirmation_label["text"]="Folder Sent"
         popup_file.protocol("WM_DELETE_WINDOW",lambda: destroy(popup_file))
@@ -118,9 +124,9 @@ def file_send():
                 skt.sendall(data)
             if ack_counter_send==100:
                 select.select([skt.fileno()],[],[])
-                check_ack_recv=skt.recv(recieve_size)
+                check_ack_recv=skt.recv(7)
                 if check_ack_recv.decode()!="<<ACK>>":
-                    print("error")
+                    print("error-"+check_ack_recv.decode())
                 ack_counter_send=0
             ack_counter_send+=1
             sent+=len(data)
@@ -129,9 +135,9 @@ def file_send():
         select.select([],[skt.fileno()],[])
         skt.sendall("<<EOF>>".encode())
         select.select([skt.fileno()],[],[])
-        check_ack_recv=skt.recv(recieve_size)
+        check_ack_recv=skt.recv(7)
         if check_ack_recv.decode()!="<<ACK>>":
-            print("error")
+            print("error-"+check_ack_recv.decode())
         file.close()
         pendingconfirmation_label["text"]="File Sent"
         popup_file.protocol("WM_DELETE_WINDOW",lambda: destroy(popup_file))
@@ -148,6 +154,7 @@ def file_recieve(initialdata):
         totalsize=size
         while size:
             ack_counter_send=0
+            ack_counter_send_checker = 512 << 10
             if initialdata:
                 if initialdata.decode()!="<<NODIR>>":
                     try:
@@ -176,18 +183,23 @@ def file_recieve(initialdata):
             else:
                 select.select([],[skt.fileno()],[])
                 skt.sendall("<<ACK>>".encode())
+            # print("Sent ACK of directory")
             select.select([skt.fileno()],[],[])
             data=skt.recv(recieve_size).decode()
             file=open(temp_file_directory+"/"+data.split('\n')[0],"wb")
             temp_sizeoffile=int(data.split('\n')[1][1:-7])
             select.select([],[skt.fileno()],[])
             skt.sendall("<<ACK>>".encode())
+            # print("Sent ACK of filename")
             while temp_sizeoffile:
                 select.select([skt.fileno()],[],[])
                 data=skt.recv(min(recieve_size,temp_sizeoffile))
                 if data:
                     file.write(data)
-                    ack_counter_send+=1
+                    ack_counter_send_checker-=len(data)
+                    if ack_counter_send_checker<=0:
+                        ack_counter_send+=1
+                        ack_counter_send_checker += 512 << 10
                     size-=len(data)
                     temp_sizeoffile-=len(data)
                     file_send_progressbar['value']=int(((totalsize-size)/(totalsize))*100)
@@ -201,6 +213,7 @@ def file_recieve(initialdata):
             if data.decode()=="<<EOF>>":
                 select.select([],[skt.fileno()],[])
                 skt.sendall("<<ACK>>".encode())
+                # print("Sent ACK of EOF")
             file.close()
         folder_sending=False
         pendingconfirmation_label["text"]="Folder Recieved"
