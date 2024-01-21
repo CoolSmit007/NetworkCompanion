@@ -16,11 +16,11 @@ A.3) Start the server.
 
 B.1) Select user type as Client.
 
-B.2) Enter IP address and Port number as display on User B's UI.
+B.2) Enter IP address and Port number as display on User A's UI.
 
 B.3) Click on "Connect".
 
-A.4) Accept the connection and verify the IP address of client which can now be seen on User-A.
+A.4) Accept the connection and verify the IP address of client which can now be seen on User-B.
 
 A.5) Select location where files need to saved.
 
