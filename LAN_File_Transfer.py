@@ -43,9 +43,10 @@ file_send_event=th.Event()
 file_send_event.set()
 ack_counter_send=0
 folder_sending=False
+ack_counter_lock=th.Lock()
 # File Send Function
 def file_send():    
-    global file_send_progressbar,file_send_event,ack_counter_send,file_directory,folder_sending,file
+    global file_send_progressbar,file_send_event,ack_counter_send,file_directory,folder_sending,file,ack_counter_lock
     first_time=True
     if folder_sending:
         size=filename_var.get().split("\n")[1]
@@ -78,9 +79,11 @@ def file_send():
                 nextdata.clear()
                 nextdata.wait()
                 while data:=file.read(send_size):
+                    ack_counter_lock.acquire()
                     if ack_counter_send==99:
                         nextdata.clear()
                         ack_counter_send=-1
+                    ack_counter_lock.release()
                     select.select([],[skt.fileno()],[])
                     skt.sendall(data)
                     ack_counter_send+=1
@@ -104,9 +107,11 @@ def file_send():
         first_time=True
         ack_counter_send=0
         while data:=file.read(send_size):
+            ack_counter_lock.acquire()
             if ack_counter_send==99:
                 nextdata.clear()
                 ack_counter_send=-1
+            ack_counter_lock.release()
             if first_time:
                 file_send_event.clear()
                 sending_queue.put(data)
@@ -166,7 +171,7 @@ def file_recieve(initialdata):
             sending_queue.put("<<ACK>>".encode())
             while temp_sizeoffile:
                 select.select([skt.fileno()],[],[])
-                data=skt.recv(min(recieve_size,temp_sizeoffile))
+                data=skt.recv(recieve_size)
                 if data:
                     file.write(data)
                     ack_counter_send+=1
@@ -199,7 +204,7 @@ def file_recieve(initialdata):
         # sending_queue.put("<<ACK>>".encode())
         while size:
             select.select([skt.fileno()],[],[])
-            data=skt.recv(min(recieve_size,size))
+            data=skt.recv(recieve_size)
             if data:
                 file.write(data)
                 ack_counter_send+=1
@@ -284,7 +289,9 @@ def reciever():
                 elif backend_data=="<<REJECTFILE>>":
                     rejectfile(None)
                 elif backend_data=="<<ACK>>":
+                    ack_counter_lock.acquire()
                     nextdata.set()
+                    ack_counter_lock.release()
                 else:
                     file_recieve(recieve_data)
             except UnicodeDecodeError:
