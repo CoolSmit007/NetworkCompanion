@@ -8,6 +8,7 @@ import threading as th
 from tkinter import filedialog
 import queue as Q
 import shutil
+from vidstream import AudioReceiver,AudioSender,ScreenShareClient,StreamingServer
 def donothing():
     pass
 def destroy(window):
@@ -40,6 +41,25 @@ file_send_event=th.Event()
 file_send_event.set()
 ack_counter_send=0
 folder_sending=False
+stream_popup=None
+stream_label=None
+stream_accept_button=None
+stream_reject_button=None
+# Streaming Functions
+def client_streaming():
+    video_stream_sender=ScreenShareClient(host=ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),port=1600,x_res=1024,y_res=720)
+    audio_stream_sender=AudioSender(host=ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),port=1700)
+    video_stream_sender_thread=th.Thread(target=video_stream_sender.start_stream)
+    audio_stream_sender_thread=th.Thread(target=audio_stream_sender.start_stream)
+    video_stream_sender_thread.start()
+    # audio_stream_sender_thread.start()
+def host_streaming():
+    video_stream_reciever=StreamingServer(host=ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),port=1600)
+    audio_stream_reciever=AudioReceiver(host=ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),port=1700)
+    video_stream_reciever_thread=th.Thread(target=video_stream_reciever.start_server)
+    audio_stream_reciever_thread=th.Thread(target=audio_stream_reciever.start_server)
+    video_stream_reciever_thread.start()
+    # audio_stream_reciever_thread.start()
 # File Send Function
 def file_send():    
     global file_send_progressbar,file_send_event,ack_counter_send,file_directory,folder_sending,file
@@ -327,6 +347,12 @@ def reciever():
                     acceptfile(None,None)
                 elif backend_data=="<<REJECTFILE>>":
                     rejectfile(None)
+                elif backend_data=="<<REQUESTSTREAM>>":
+                    requeststream()
+                elif backend_data=="<<REJECTSTREAM>>":
+                    rejectstream()
+                elif backend_data=="<<ACCEPTSTREAM>>":
+                    acceptstream()
                 else:
                     file_recieve(recieve_data)
             except UnicodeDecodeError:
@@ -377,11 +403,12 @@ def dropdown_check(value):
         port["state"]="normal"
         filename_var.set("Disconnected")
         ipaddr_text["text"]='Enter IP Address of Host(Values between 0-255)'
-        port_text["text"]='Enter Port of Host\n(Value between 1024-49151)'
+        port_text["text"]='Enter Port of Host\n(Value between 2000-49151)'
         file_button["text"]="Select File to Send"
         file_button.grid_forget()
-        file_button.grid(row=4,column=0,columnspan=5,pady=2,sticky='e')
-        selectfolder_button.grid(row=4,column=5,columnspan=4,pady=2,sticky='w')
+        file_button.grid(row=4,column=0,columnspan=8,pady=2,sticky='e')
+        selectfolder_button.grid(row=4,column=2,columnspan=7,pady=2,sticky='w')
+        stream_button.grid(row=4,column=8,columnspan=1,pady=2,sticky='w',padx=5)
         file_status.grid_forget()
         sendfile_button.grid(row=6,column=0,columnspan=9,pady=2)
         skt=socket.socket()
@@ -403,8 +430,9 @@ def dropdown_check(value):
         file_button["text"]="Select Download Location"
         file_button.grid_forget()
         file_button.grid(row=4,column=0,columnspan=9,pady=2)
-        port_text["text"]='Port\n(Value between 1024-49151)'
+        port_text["text"]='Port\n(Value between 2000-49151)'
         sendfile_button.grid_forget()
+        stream_button.grid_forget()
         selectfolder_button.grid_forget()
         file_status.grid(row=6,column=0,columnspan=9,pady=2)
         serverskt=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
@@ -458,6 +486,7 @@ file_status=tk.Label(base,text='Status: ')
 sendfile_button=tk.Button(base,text='Send',state='disabled')
 selectfolder_button=tk.Button(base,text='Select Folder to Send',state='disabled')
 disconnect_button=tk.Button(base,text='Disconnect',state='disabled')
+stream_button=tk.Button(base,text='Share Screen',state='disabled')
 # Placing Elements
 dropdown.grid(row=0,column=0,columnspan=10)
 ipaddr_text.grid(row=1,column=0,columnspan=8)
@@ -482,7 +511,7 @@ def check_connectstart(*args):
     for x in ip_check:
         if x and int(x)>=0 and int(x)<=255:
             check+=1
-    if port_var.get() and int(port_var.get())<=65535 and int(port_var.get())>=1024 and check==4:
+    if port_var.get() and int(port_var.get())<=65535 and int(port_var.get())>=2000 and check==4:
         connect_start["state"]="normal"
     else:
         connect_start["state"]="disabled"
@@ -524,6 +553,7 @@ def client_connection(connecting_label,popup):
             connect_start["state"]="disabled"
             file_button["state"]="normal"
             selectfolder_button["state"]="normal"
+            stream_button["state"]="normal"
             filename_var.set("No File Selected")
             disconnect_button["state"]="normal"
             dropdown["state"]="disabled"
@@ -602,7 +632,7 @@ def host_connection(pendingconnection_label,acceptconn_butt,rejectconn_butt):
     rejectconn_butt["state"]="normal"
 def connect():
     global port_var,base
-    if not(int(port_var.get())>=1024 and int(port_var.get())<=49151):
+    if not(int(port_var.get())>=2000 and int(port_var.get())<=49151):
         popup=tk.Toplevel(base)
         popup.geometry("+%d+%d" %(base.winfo_x(),base.winfo_y()))
         error_port_label=tk.Label(popup,text="Incorrect Port Number")
@@ -716,6 +746,54 @@ def sendfile():
     popup_file.protocol("WM_DELETE_WINDOW",donothing)
     return
 sendfile_button["command"]=sendfile
+def acceptstream():
+    global stream_popup,stream_label,stream_accept_button,stream_reject_button
+    if dropdown_var.get()=="Client(Send File)":
+        stream_label["text"]="Host Accepted Stream(You can close this window now)"
+        stream_popup.protocol("WM_DELETE_WINDOW",lambda: destroy(stream_popup))
+        stream_client=th.Thread(target=client_streaming,args=())
+        stream_client.start()
+    else:
+        sending_queue.put("<<ACCEPTSTREAM>>".encode())
+        stream_label["text"]="Stream Accepted(You can close this window now)(Press 'q' to quit stream)"
+        stream_popup.protocol("WM_DELETE_WINDOW",lambda: destroy(stream_popup))
+        stream_host=th.Thread(target=host_streaming,args=())
+        stream_accept_button["state"]="disabled"
+        stream_reject_button["state"]="disabled"
+        stream_host.start()
+def rejectstream():
+    global stream_popup,stream_label,stream_accept_button,stream_reject_button
+    if dropdown_var.get()=="Client(Send File)":
+        stream_label["text"]="Host Rejected Stream"
+        stream_popup.protocol("WM_DELETE_WINDOW",lambda: destroy(stream_popup))
+    else:
+        sending_queue.put("<<REJECTSTREAM>>".encode())
+        stream_label["text"]="Stream Rejected"
+        stream_accept_button["state"]="disabled"
+        stream_reject_button["state"]="disabled"
+        stream_popup.protocol("WM_DELETE_WINDOW",lambda: destroy(stream_popup))
+def requeststream():
+    global base,stream_popup,stream_label,stream_accept_button,stream_reject_button
+    stream_popup=tk.Toplevel(base)
+    stream_popup.grab_set()
+    stream_popup.minsize(300,100)
+    stream_popup.geometry("+%d+%d" %(base.winfo_x(),base.winfo_y()))
+    stream_popup.rowconfigure(0,minsize=50)
+    stream_popup.rowconfigure(1,minsize=50)
+    stream_popup.columnconfigure(0,minsize=150)
+    stream_popup.columnconfigure(1,minsize=150)
+    stream_popup.protocol("WM_DELETE_WINDOW",donothing)
+    stream_label=tk.Label(stream_popup,text="Waiting for host to Accept Stream",justify="center")
+    stream_label.grid(row=0,column=0,columnspan=2,pady=10)
+    if dropdown_var.get()!="Client(Send File)":
+        stream_label["text"]="Accept Stream?"
+        stream_accept_button=tk.Button(stream_popup,text="Accept",justify="center",command=acceptstream)
+        stream_accept_button.grid(row=1,column=0,sticky="nsew")
+        stream_reject_button=tk.Button(stream_popup,text="Reject",justify="center",command=rejectstream)
+        stream_reject_button.grid(row=1,column=1,sticky="nsew")
+    else:
+        sending_queue.put("<<REQUESTSTREAM>>".encode())
+stream_button["command"]=requeststream
 def disconnect():
     global serverskt,skt,start_disconnect
     connect_start["state"]="normal"
@@ -723,6 +801,7 @@ def disconnect():
     file_button["state"]="disabled"
     selectfolder_button["state"]="disabled"
     sendfile_button["state"]="disabled"
+    stream_button["state"]="disabled"
     dropdown["state"]="normal"
     filename_var.set("Disconnected")
     if dropdown_var.get()=='Client(Send File)':
