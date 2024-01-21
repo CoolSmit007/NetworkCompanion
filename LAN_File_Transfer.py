@@ -106,6 +106,7 @@ def file_send():
         while data:=file.read(send_size):
             if ack_counter_send==99:
                 nextdata.clear()
+                ack_counter_send=-1
             if first_time:
                 file_send_event.clear()
                 sending_queue.put(data)
