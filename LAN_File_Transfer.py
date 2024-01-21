@@ -37,16 +37,13 @@ file=None
 file_send_progressbar=None
 percentage_label=None
 filename=None
-nextdata=th.Event()
-nextdata.set()
 file_send_event=th.Event()
 file_send_event.set()
 ack_counter_send=0
 folder_sending=False
-ack_counter_lock=th.Lock()
 # File Send Function
 def file_send():    
-    global file_send_progressbar,file_send_event,ack_counter_send,file_directory,folder_sending,file,ack_counter_lock
+    global file_send_progressbar,file_send_event,ack_counter_send,file_directory,folder_sending,file
     first_time=True
     if folder_sending:
         size=filename_var.get().split("\n")[1]
@@ -72,33 +69,39 @@ def file_send():
                         skt.sendall("<<NODIR>>".encode())
                     else:
                         skt.sendall(path.split('\\',1)[1].encode())
-                nextdata.clear()
-                nextdata.wait()
+                select.select([skt.fileno()],[],[])
+                check_ack_recv=skt.recv(recieve_size)
+                if check_ack_recv.decode()!="<<ACK>>":
+                    print("error")
                 select.select([],[skt.fileno()],[])
                 skt.sendall((f+'\n('+str(size)+' Bytes)').encode())
-                nextdata.clear()
-                nextdata.wait()
+                select.select([skt.fileno()],[],[])
+                check_ack_recv=skt.recv(recieve_size)
+                if check_ack_recv.decode()!="<<ACK>>":
+                    print("error")
                 while data:=file.read(send_size):
-                    ack_counter_lock.acquire()
-                    if ack_counter_send==99:
-                        nextdata.clear()
-                        ack_counter_send=-1
-                    ack_counter_lock.release()
                     select.select([],[skt.fileno()],[])
                     skt.sendall(data)
                     ack_counter_send+=1
                     sent+=len(data)
                     file_send_progressbar['value']=int((sent/totalsize)*100)
                     percentage_label["text"]=str(int((sent/totalsize)*100))+"%"
-                    nextdata.wait()
-                nextdata.clear()
+                    if ack_counter_send==100:
+                        select.select([skt.fileno()],[],[])
+                        check_ack_recv=skt.recv(recieve_size)
+                        if check_ack_recv.decode()!="<<ACK>>":
+                            print("error")
+                        ack_counter_send=0
+                select.select([],[skt.fileno()],[])
                 skt.sendall("<<EOF>>".encode())
-                nextdata.wait()
+                select.select([skt.fileno()],[],[])
+                check_ack_recv=skt.recv(recieve_size)
+                if check_ack_recv.decode()!="<<ACK>>":
+                    print("error")
                 file.close()
         pendingconfirmation_label["text"]="Folder Sent"
         popup_file.protocol("WM_DELETE_WINDOW",lambda: destroy(popup_file))
         file_send_event.set()
-        folder_sending=False
     else:
         size=filename_var.get().split("\n")[1]
         size=int(size[1:-7])
@@ -107,11 +110,6 @@ def file_send():
         first_time=True
         ack_counter_send=0
         while data:=file.read(send_size):
-            ack_counter_lock.acquire()
-            if ack_counter_send==99:
-                nextdata.clear()
-                ack_counter_send=-1
-            ack_counter_lock.release()
             if first_time:
                 file_send_event.clear()
                 sending_queue.put(data)
@@ -119,14 +117,23 @@ def file_send():
             else:
                 select.select([],[skt.fileno()],[])
                 skt.sendall(data)
+            if ack_counter_send==100:
+                select.select([skt.fileno()],[],[])
+                check_ack_recv=skt.recv(recieve_size)
+                if check_ack_recv.decode()!="<<ACK>>":
+                    print("error")
+                ack_counter_send=0
             ack_counter_send+=1
             sent+=len(data)
             file_send_progressbar['value']=int((sent/totalsize)*100)
             percentage_label["text"]=str(int((sent/totalsize)*100))+"%"
-            nextdata.wait()
-        nextdata.clear()
+        print("Sending EOF")
+        select.select([],[skt.fileno()],[])
         skt.sendall("<<EOF>>".encode())
-        nextdata.wait()
+        select.select([skt.fileno()],[],[])
+        check_ack_recv=skt.recv(recieve_size)
+        if check_ack_recv.decode()!="<<ACK>>":
+            print("error")
         file.close()
         pendingconfirmation_label["text"]="File Sent"
         popup_file.protocol("WM_DELETE_WINDOW",lambda: destroy(popup_file))
@@ -171,7 +178,7 @@ def file_recieve(initialdata):
             sending_queue.put("<<ACK>>".encode())
             while temp_sizeoffile:
                 select.select([skt.fileno()],[],[])
-                data=skt.recv(recieve_size)
+                data=skt.recv(min(recieve_size,temp_sizeoffile))
                 if data:
                     file.write(data)
                     ack_counter_send+=1
@@ -201,19 +208,24 @@ def file_recieve(initialdata):
         size-=len(initialdata)
         file_send_progressbar['value']=int(((totalsize-size)/(totalsize))*100)
         percentage_label["text"]=str(int(((totalsize-size)/(totalsize))*100))+"%"
+        ack_counter_send_checker = 512 << 10
         # sending_queue.put("<<ACK>>".encode())
         while size:
             select.select([skt.fileno()],[],[])
-            data=skt.recv(recieve_size)
+            data=skt.recv(min(recieve_size,size))
             if data:
                 file.write(data)
-                ack_counter_send+=1
                 size-=len(data)
+                ack_counter_send_checker-=len(data)
+                if ack_counter_send_checker<=0:
+                    ack_counter_send+=1
+                    ack_counter_send_checker += 512 << 10
                 file_send_progressbar['value']=int(((totalsize-size)/(totalsize))*100)
                 percentage_label["text"]=str(int(((totalsize-size)/(totalsize))*100))+"%"
                 if ack_counter_send==100:
                     sending_queue.put("<<ACK>>".encode())
                     ack_counter_send=0
+        print("waiting for EOF")
         select.select([skt.fileno()],[],[])
         data=skt.recv(recieve_size)
         if data.decode()=="<<EOF>>":
@@ -238,16 +250,13 @@ def acceptfile(acceptfile_butt,rejectfile_butt):
     if dropdown_var.get()=="Client(Send File)":
         if folder_sending:
             pendingconfirmation_label["text"]="Sending..."
-            file_send_thread=th.Thread(target=file_send,args=())
-            file_send_thread.start()
+            file_send()
         else:
             file=open(file_directory,"rb")
             pendingconfirmation_label["text"]="Sending..."
-            file_send_thread=th.Thread(target=file_send,args=())
-            file_send_thread.start()
+            file_send()
     else:
         pendingconfirmation_label["text"]="Receiving..."
-        sending_queue.put("<<ACCEPTFILE>>".encode())
         file_directory=filename_var.get()[10:]
         if folder_sending:
             try:
@@ -256,14 +265,15 @@ def acceptfile(acceptfile_butt,rejectfile_butt):
                 pass
             file_directory=os.path.join(file_directory,filename.split("\n")[0])
         else:
-            file=open(file_directory+"\\"+filename.split("\n")[0],"wb")
+            file=open(file_directory+"/"+filename.split("\n")[0],"wb")
+        sending_queue.put("<<ACCEPTFILE>>".encode())
         acceptfile_butt["state"]="disabled"
         rejectfile_butt["state"]="disabled"
         # file_recieve_thread=th.Thread(target=file_recieve,args=())
         # file_recieve_thread.start()
 # Sender/Reciever Working
 def reciever():
-    global skt,start_disconnect,reciever_queue,recieve_size,filename,nextdata,ack_counter_send,folder_sending
+    global skt,start_disconnect,reciever_queue,recieve_size,filename,ack_counter_send,folder_sending
     while True:
         try:
             select.select([skt.fileno()],[],[])
@@ -288,10 +298,6 @@ def reciever():
                     acceptfile(None,None)
                 elif backend_data=="<<REJECTFILE>>":
                     rejectfile(None)
-                elif backend_data=="<<ACK>>":
-                    ack_counter_lock.acquire()
-                    nextdata.set()
-                    ack_counter_lock.release()
                 else:
                     file_recieve(recieve_data)
             except UnicodeDecodeError:
