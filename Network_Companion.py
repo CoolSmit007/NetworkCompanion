@@ -861,8 +861,10 @@ def stop_stream():
         else:
             stream_label["text"]="Stream Stopped-Host closed the stream"
     else:
+        file_status["text"]="Stream Ended by Client"
         if streaming_var:
             streaming_var=False
+            file_status["text"]="Stream Ended"
             sending_queue.put("<<ENDSTREAM>>".encode())
         if video_stream_var_recv:
             video_stream_reciever.stop_server()
@@ -870,10 +872,6 @@ def stop_stream():
             mic_audio_stream_reciever.stop_server()
         if system_audio_stream_var_recv:
             system_audio_reciever.stop_server()
-        stream_label["text"]="Stream Ended(This window will close in 5 secs)"
-        stream_label.update()
-        stream_popup.focus_force()
-        time.sleep(5)
         stream_popup.destroy()
         stream_popup.update()
 def start_stream():
