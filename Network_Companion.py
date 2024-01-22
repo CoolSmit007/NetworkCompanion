@@ -66,29 +66,36 @@ system_audio_stream_sender_thread=None
 video_stream_reciever=None
 mic_audio_stream_reciever=None
 system_audio_reciever=None
+system_audio_socket=None
+stop_system_audio_event=th.Event()
+stop_system_audio_event.set()
+received_rate=None
 # Streaming Functions
+def send_system_audio(in_data, frame_count, time_info, status):
+    global system_audio_socket
+    try:
+        system_audio_socket.sendall(in_data)
+    except ConnectionAbortedError:
+        stop_system_audio_event.set()
+    except ConnectionResetError:
+        stop_system_audio_event.set()
+    return (in_data,pyaudiowpatch.paContinue)
 def system_audio_sender():
-    global default_speakers,streaming_var
+    global default_speakers,streaming_var,system_audio_stream,system_audio_socket
     connectionestablished=False
-    system_audio_stream=pyaudiowpatch.PyAudio().open(format=pyaudiowpatch.paInt16,channels=default_speakers["maxInputChannels"],
-                               rate=int(default_speakers["defaultSampleRate"]),input=True,
-                               frames_buffer_size=4096,input_device_index=default_speakers["index"])
     system_audio_socket=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
     while not connectionestablished:
         try:
-            system_audio_socket.connect(host=ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),port=1800)
+            system_audio_socket.connect((ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),1800))
             connectionestablished=True
         except ConnectionRefusedError:
-            pass
+            return
         except TimeoutError:
-            pass
-    try:
-        while streaming_var:
-            system_audio_socket.sendall(system_audio_stream.read(4096))
-    except ConnectionAbortedError:
-        pass
-    except ConnectionResetError:
-        pass
+            return
+    with pyaudiowpatch.PyAudio().open(format=pyaudiowpatch.paInt16,channels=1,rate=int(default_speakers["defaultSampleRate"]),
+                                      input=True,frames_per_buffer=4096,input_device_index=default_speakers["index"],
+                                        stream_callback=send_system_audio) as system_audio_stream:
+        stop_system_audio_event.wait()
     system_audio_socket.close()
 def client_streaming():
     global video_stream_sender,mic_audio_stream_sender,system_audio_stream_sender_thread
@@ -99,10 +106,11 @@ def client_streaming():
         mic_audio_stream_sender=AudioSender(host=ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),port=1700)
         mic_audio_stream_sender.start_stream()
     if system_audio_stream_var.get():
+        stop_system_audio_event.clear()
         system_audio_stream_sender_thread=th.Thread(target=system_audio_sender,args=())
         system_audio_stream_sender_thread.start()
 def host_streaming():
-    global video_stream_reciever,mic_audio_stream_reciever,system_audio_reciever
+    global video_stream_reciever,mic_audio_stream_reciever,system_audio_reciever,received_rate
     if video_stream_var_recv:
         video_stream_reciever=StreamingServer(host=ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),port=1600)
         video_stream_reciever.start_server()
@@ -110,7 +118,7 @@ def host_streaming():
         mic_audio_stream_reciever=AudioReceiver(host=ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),port=1700)
         mic_audio_stream_reciever.start_server()
     if system_audio_stream_var_recv:
-        system_audio_reciever=AudioReceiver(host=ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),port=1800)
+        system_audio_reciever=AudioReceiver(host=ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),port=1800,rate=int(received_rate))
         system_audio_reciever.start_server()
 # File Send Function
 def file_send():    
@@ -838,6 +846,8 @@ def stop_stream():
             video_stream_sender.stop_stream()
         if mic_stream_var.get():
             mic_audio_stream_sender.stop_stream()
+        if system_audio_stream_var.get():
+            stop_system_audio_event.set()
         stream_popup.protocol("WM_DELETE_WINDOW",lambda: destroy(stream_popup))
         start_stream_button["state"]="normal"
         video_stream_check["state"]="normal"
@@ -874,14 +884,15 @@ def start_stream():
     video_stream_check["state"]="disabled"
     mic_stream_check["state"]="disabled"
     system_audio_stream_check["state"]="disabled"
-    str="<<REQUESTSTREAM>>"
+    str1="<<REQUESTSTREAM>>"
     if video_stream_var.get():
-        str+="<<V>>"
+        str1+="<<V>>"
     if mic_stream_var.get():
-        str+="<<M>>"
+        str1+="<<M>>"
     if system_audio_stream_var.get():
-        str+="<<S>>"
-    sending_queue.put(str.encode())
+        str1+="<<S>>"
+        str1+="<<<"+str(default_speakers["defaultSampleRate"])+">>>"
+    sending_queue.put(str1.encode())
 def streamcallback(*args):
     if video_stream_var.get() or mic_stream_var.get() or system_audio_stream_var.get():
         start_stream_button["state"]="normal"
@@ -889,7 +900,7 @@ def streamcallback(*args):
         start_stream_button["state"]="disabled"
 def stream(data=None):
     global base,stream_popup,stream_label,stream_accept_button,stream_reject_button,default_speakers,video_stream_var_recv,mic_stream_var_recv,system_audio_stream_var_recv
-    global start_stream_button,stop_stream_button,video_stream_check,mic_stream_check,system_audio_stream_check
+    global start_stream_button,stop_stream_button,video_stream_check,mic_stream_check,system_audio_stream_check,received_rate
     stream_popup=tk.Toplevel(base)
     stream_popup.grab_set()
     stream_popup.geometry("+%d+%d" %(base.winfo_x(),base.winfo_y()))
@@ -919,6 +930,8 @@ def stream(data=None):
             stream_label["text"]+=",System Audio"
             tempvariable+=5
             system_audio_stream_var_recv=True
+            print(data[tempvariable+1:len(data)-3])
+            received_rate=float(data[tempvariable+1:len(data)-3])
         stream_label["text"]+=")?"
         stream_accept_button=tk.Button(stream_popup,text="Accept",justify="center",command=acceptstream)
         stream_accept_button.grid(row=1,column=0,sticky="nsew")
