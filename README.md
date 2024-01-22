@@ -1,5 +1,5 @@
 # LANTransfer
-This project allows users to transfer files over a network.
+This project allows users to transfer files, folder and share thier screen over a network.
 
 User A - Recieve File
 
@@ -34,4 +34,3 @@ A.7) Wait for file to be recieved.
 
 B.6) Wait for file to be sent.
 
-(Note: Avoid virus warning by AntiVirus completely safe to use. It is flagged as virus due to latest PyInstaller library of Python)
