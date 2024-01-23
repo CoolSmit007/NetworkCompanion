@@ -1,4 +1,5 @@
-import tkinter as tk
+# import tkinter as tk
+import customtkinter as tk
 from tkinter import ttk
 import os
 from tkinter.filedialog import askopenfilename
@@ -17,7 +18,7 @@ def destroy(window):
     window.destroy()
     window.update()
 # Globals
-base=tk.Tk()
+base=tk.CTk()
 base.resizable(False,False)
 base.title("Share Files on LAN")
 connection_accepted=False
@@ -167,8 +168,8 @@ def file_send():
                     skt.sendall(data)
                     ack_counter_send+=1
                     sent+=len(data)
-                    file_send_progressbar['value']=int((sent/totalsize)*100)
-                    percentage_label["text"]=str(int((sent/totalsize)*100))+"%"
+                    file_send_progressbar.set((sent/totalsize))
+                    percentage_label.configure(text=str(int((sent/totalsize)*100))+"%")
                     if ack_counter_send==100:
                         select.select([skt.fileno()],[],[])
                         check_ack_recv=skt.recv(7)
@@ -184,7 +185,7 @@ def file_send():
                     print("error-"+check_ack_recv.decode())
                 # print("Recieved ACK")
                 file.close()
-        pendingconfirmation_label["text"]="Folder Sent"
+        pendingconfirmation_label.configure(text="Folder Sent")
         popup_file.protocol("WM_DELETE_WINDOW",lambda: destroy(popup_file))
         file_send_event.set()
     else:
@@ -210,8 +211,8 @@ def file_send():
                 ack_counter_send=0
             ack_counter_send+=1
             sent+=len(data)
-            file_send_progressbar['value']=int((sent/totalsize)*100)
-            percentage_label["text"]=str(int((sent/totalsize)*100))+"%"
+            file_send_progressbar.set((sent/totalsize))
+            percentage_label.configure(text=str(int((sent/totalsize)*100))+"%")
         select.select([],[skt.fileno()],[])
         skt.sendall("<<EOF>>".encode())
         select.select([skt.fileno()],[],[])
@@ -219,7 +220,7 @@ def file_send():
         if check_ack_recv.decode()!="<<ACK>>":
             print("error-"+check_ack_recv.decode())
         file.close()
-        pendingconfirmation_label["text"]="File Sent"
+        pendingconfirmation_label.configure(text="File Sent")
         popup_file.protocol("WM_DELETE_WINDOW",lambda: destroy(popup_file))
         file_send_event.set()
     return
@@ -282,8 +283,8 @@ def file_recieve(initialdata):
                         ack_counter_send_checker += 512 << 10
                     size-=len(data)
                     temp_sizeoffile-=len(data)
-                    file_send_progressbar['value']=int(((totalsize-size)/(totalsize))*100)
-                    percentage_label["text"]=str(int(((totalsize-size)/(totalsize))*100))+"%"
+                    file_send_progressbar.set(((totalsize-size)/(totalsize)))
+                    percentage_label.configure(text=str(int(((totalsize-size)/(totalsize))*100))+"%")
                     if ack_counter_send==100:
                         select.select([],[skt.fileno()],[])
                         skt.sendall("<<ACK>>".encode())
@@ -296,9 +297,9 @@ def file_recieve(initialdata):
                 # print("Sent ACK of EOF")
             file.close()
         folder_sending=False
-        pendingconfirmation_label["text"]="Folder Recieved"
+        pendingconfirmation_label.configure(text="Folder Recieved")
         popup_file.protocol("WM_DELETE_WINDOW",lambda: destroy(popup_file))
-        file_status["text"]="Status: Folder Recieved Succesfully"
+        file_status.configure(text="Status: Folder Recieved Succesfully")
         file_send_event.set()
     else:
         ack_counter_send=0
@@ -308,8 +309,8 @@ def file_recieve(initialdata):
         file.write(initialdata)
         ack_counter_send+=1
         size-=len(initialdata)
-        file_send_progressbar['value']=int(((totalsize-size)/(totalsize))*100)
-        percentage_label["text"]=str(int(((totalsize-size)/(totalsize))*100))+"%"
+        file_send_progressbar.set(((totalsize-size)/(totalsize)))
+        percentage_label.configure(text=str(int(((totalsize-size)/(totalsize))*100))+"%")
         ack_counter_send_checker = 512 << 10
         # sending_queue.put("<<ACK>>".encode())
         while size:
@@ -322,8 +323,8 @@ def file_recieve(initialdata):
                 if ack_counter_send_checker<=0:
                     ack_counter_send+=1
                     ack_counter_send_checker += 512 << 10
-                file_send_progressbar['value']=int(((totalsize-size)/(totalsize))*100)
-                percentage_label["text"]=str(int(((totalsize-size)/(totalsize))*100))+"%"
+                file_send_progressbar.set(((totalsize-size)/(totalsize)))
+                percentage_label.configure(text=str(int(((totalsize-size)/(totalsize))*100))+"%")
                 if ack_counter_send==100:
                     if first_time:
                         file_send_event.clear()
@@ -339,9 +340,9 @@ def file_recieve(initialdata):
             select.select([],[skt.fileno()],[])
             skt.sendall("<<ACK>>".encode())
         file.close()
-        pendingconfirmation_label["text"]="File Recieved"
+        pendingconfirmation_label.configure(text="File Recieved")
         popup_file.protocol("WM_DELETE_WINDOW",lambda: destroy(popup_file))
-        file_status["text"]="Status: File Recieved Succesfully"
+        file_status.configure(text="Status: File Recieved Succesfully")
         file_send_event.set()
     return
 def rejectfile(dropdown_var):
@@ -352,20 +353,20 @@ def rejectfile(dropdown_var):
         popup_file.destroy()
         popup_file.update()
     else:
-        pendingconfirmation_label["text"]="Host Rejected(You can close this Window)"
+        pendingconfirmation_label.configure(text="Host Rejected(You can close this Window)")
         popup_file.protocol("WM_DELETE_WINDOW",lambda : destroy(popup_file))
 def acceptfile(acceptfile_butt,rejectfile_butt):
     global file,file_directory,pendingconfirmation_label,filename
     if dropdown_var.get()=="Client(Send File)":
         if folder_sending:
-            pendingconfirmation_label["text"]="Sending..."
+            pendingconfirmation_label.configure(text="Sending...")
             file_send()
         else:
             file=open(file_directory,"rb")
-            pendingconfirmation_label["text"]="Sending..."
+            pendingconfirmation_label.configure(text="Sending...")
             file_send()
     else:
-        pendingconfirmation_label["text"]="Receiving..."
+        pendingconfirmation_label.configure(text="Receiving...")
         file_directory=filename_var.get()[10:]
         if folder_sending:
             try:
@@ -376,8 +377,8 @@ def acceptfile(acceptfile_butt,rejectfile_butt):
         else:
             file=open(file_directory+"/"+filename.split("\n")[0],"wb")
         sending_queue.put("<<ACCEPTFILE>>".encode())
-        acceptfile_butt["state"]="disabled"
-        rejectfile_butt["state"]="disabled"
+        acceptfile_butt.configure(state="disabled")
+        rejectfile_butt.configure(state="disabled")
         # file_recieve_thread=th.Thread(target=file_recieve,args=())
         # file_recieve_thread.start()
 # Sender/Reciever Working
@@ -454,46 +455,48 @@ def dropdown_check(value):
     global skt,serverskt
     if value=="Client(Send File)":
         connect_start_var.set("Connect")
-        ip1["state"]="normal"
-        ip2["state"]="normal"
-        ip3["state"]="normal"
-        ip4["state"]="normal"
+        ip1.configure(state="normal")
+        ip2.configure(state="normal")
+        ip3.configure(state="normal")
+        ip4.configure(state="normal")
         ip1_var.set('')
         ip2_var.set('')
         ip3_var.set('')
         ip4_var.set('')
         port_var.set('')
-        port["state"]="normal"
+        port.configure(state="normal")
         filename_var.set("Disconnected")
-        ipaddr_text["text"]='Enter IP Address of Host(Values between 0-255)'
-        port_text["text"]='Enter Port of Host\n(Value between 2000-49151)'
-        file_button["text"]="Select File to Send"
+        ipaddr_text.configure(text='Enter IP Address of Host\n(Values between 0-255)')
+        port_text.configure(text='Enter Port of Host\n(Value between 2000-49151)')
+        file_button.configure(text="Select File")
         file_button.grid_forget()
-        file_button.grid(row=4,column=0,columnspan=8,pady=2,sticky='e')
-        selectfolder_button.grid(row=4,column=2,columnspan=7,pady=2,sticky='w')
-        stream_button.grid(row=4,column=8,columnspan=1,pady=2,sticky='w',padx=5)
+        file_button.configure(width=100)
+        file_button.grid(row=4,column=0,columnspan=9,pady=2,sticky='w')
+        selectfolder_button.grid(row=4,column=4,columnspan=6,pady=2,sticky='w',padx=30)
+        stream_button.grid(row=4,column=0,columnspan=9,pady=2,sticky='e')
         file_status.grid_forget()
         sendfile_button.grid(row=6,column=0,columnspan=9,pady=2)
         skt=socket.socket()
     else:
         connect_start_var.set("Start")
         ip=get_ip_address()[0].split('.')
-        ip1["state"]="disabled"
-        ip2["state"]="disabled"
-        ip3["state"]="disabled"
-        ip4["state"]="disabled"
+        ip1.configure(state="disabled")
+        ip2.configure(state="disabled")
+        ip3.configure(state="disabled")
+        ip4.configure(state="disabled")
         ip1_var.set(ip[0])
         ip2_var.set(ip[1])
         ip3_var.set(ip[2])
         ip4_var.set(ip[3])
         port_var.set('')
-        port["state"]="normal"
+        port.configure(state="normal")
         filename_var.set("Not Started")
-        ipaddr_text["text"]='IP Address'
-        file_button["text"]="Select Download Location"
+        ipaddr_text.configure(text='IP Address')
+        file_button.configure(text="Select Download Location")
         file_button.grid_forget()
         file_button.grid(row=4,column=0,columnspan=9,pady=2)
-        port_text["text"]='Port\n(Value between 2000-49151)'
+        file_button.configure(width=200)
+        port_text.configure(text='Port\n(Value between 2000-49151)')
         sendfile_button.grid_forget()
         stream_button.grid_forget()
         selectfolder_button.grid_forget()
@@ -524,32 +527,32 @@ validateipreg=base.register(validateip)
 validateportreg=base.register(validateport)
 # Elements
 dropdown_var = tk.StringVar(value="Select User")
-dropdown_label = tk.Label(base, text="Host")
-dropdown=tk.OptionMenu(base,dropdown_var,*["Host(Recieve File)","Client(Send File)"],command=dropdown_check)
+dropdown_label = tk.CTkLabel(base, text="Host")
+dropdown=tk.CTkOptionMenu(base,variable=dropdown_var,values=["Host(Recieve File)","Client(Send File)"],command=dropdown_check)
 ip1_var=tk.StringVar()
 ip2_var=tk.StringVar()
 ip3_var=tk.StringVar()
 ip4_var=tk.StringVar()
 port_var=tk.StringVar(value="")
-ip1=tk.Entry(base,textvariable=ip1_var,width=9,justify="center",validate="all",validatecommand=(validateipreg,'%P'),state="disabled")
-ip2=tk.Entry(base,textvariable=ip2_var,width=9,justify="center",validate="all",validatecommand=(validateipreg,'%P'),state="disabled")
-ip3=tk.Entry(base,textvariable=ip3_var,width=9,justify="center",validate="all",validatecommand=(validateipreg,'%P'),state="disabled")
-ip4=tk.Entry(base,textvariable=ip4_var,width=9,justify="center",validate="all",validatecommand=(validateipreg,'%P'),state="disabled")
-port=tk.Entry(base,textvariable=port_var,width=15,justify="center",validate="all",validatecommand=(validateportreg,'%P'),state="disabled")
-fullstop=[tk.Label(base,text='.'),tk.Label(base,text='.'),tk.Label(base,text='.')]
-colon=tk.Label(base,text=':')
+ip1=tk.CTkEntry(base,textvariable=ip1_var,width=36,justify="center",validate="all",validatecommand=(validateipreg,'%P'),state="disabled")
+ip2=tk.CTkEntry(base,textvariable=ip2_var,width=36,justify="center",validate="all",validatecommand=(validateipreg,'%P'),state="disabled")
+ip3=tk.CTkEntry(base,textvariable=ip3_var,width=36,justify="center",validate="all",validatecommand=(validateipreg,'%P'),state="disabled")
+ip4=tk.CTkEntry(base,textvariable=ip4_var,width=36,justify="center",validate="all",validatecommand=(validateipreg,'%P'),state="disabled")
+port=tk.CTkEntry(base,textvariable=port_var,width=60,justify="center",validate="all",validatecommand=(validateportreg,'%P'),state="disabled")
+fullstop=[tk.CTkLabel(base,text='.'),tk.CTkLabel(base,text='.'),tk.CTkLabel(base,text='.')]
+colon=tk.CTkLabel(base,text=':')
 connect_start_var=tk.StringVar(value="Connect")
-connect_start=tk.Button(base,textvariable=connect_start_var,state="disabled")
-ipaddr_text=tk.Label(base,text='')
-port_text=tk.Label(base,text='')
+connect_start=tk.CTkButton(base,textvariable=connect_start_var,state="disabled")
+ipaddr_text=tk.CTkLabel(base,text='')
+port_text=tk.CTkLabel(base,text='')
 filename_var=tk.StringVar(value='Select User Type')
-filename_text=tk.Label(base,textvariable=filename_var,wraplength=400)
-file_button=tk.Button(base,text='',state='disabled')
-file_status=tk.Label(base,text='Status: ')
-sendfile_button=tk.Button(base,text='Send',state='disabled')
-selectfolder_button=tk.Button(base,text='Select Folder to Send',state='disabled')
-disconnect_button=tk.Button(base,text='Disconnect',state='disabled')
-stream_button=tk.Button(base,text='Stream Data',state='disabled')
+filename_text=tk.CTkLabel(base,textvariable=filename_var,wraplength=400)
+file_button=tk.CTkButton(base,text='',state='disabled',width=100)
+file_status=tk.CTkLabel(base,text='Status: ')
+sendfile_button=tk.CTkButton(base,text='Send',state='disabled')
+selectfolder_button=tk.CTkButton(base,text='Select Folder',state='disabled',width=100)
+disconnect_button=tk.CTkButton(base,text='Disconnect',state='disabled')
+stream_button=tk.CTkButton(base,text='Stream',state='disabled',width=100)
 # Placing Elements
 dropdown.grid(row=0,column=0,columnspan=10)
 ipaddr_text.grid(row=1,column=0,columnspan=8)
@@ -575,9 +578,9 @@ def check_connectstart(*args):
         if x and int(x)>=0 and int(x)<=255:
             check+=1
     if port_var.get() and int(port_var.get())<=65535 and int(port_var.get())>=2000 and check==4:
-        connect_start["state"]="normal"
+        connect_start.configure(state="normal")
     else:
-        connect_start["state"]="disabled"
+        connect_start.configure(state="disabled")
 ip1_var.trace_add("write",callback=check_connectstart)
 ip2_var.trace_add("write",callback=check_connectstart)
 ip3_var.trace_add("write",callback=check_connectstart)
@@ -587,17 +590,17 @@ port_var.trace_add("write",callback=check_connectstart)
 def client_connection(connecting_label,popup):
     global skt,connection_accepted,reciever_thread,sender_thread
     try:
-        connecting_label["text"]='Connecting...'+"\n(Your Address : "+get_ip_address()[0]+")"
+        connecting_label.configure(text='Connecting...'+"\n(Your Address : "+get_ip_address()[0]+")")
         connecting_label.update()
         skt.connect((ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),int(port_var.get())))
     except ConnectionRefusedError:
-        connecting_label["text"]="Connection Refused"
+        connecting_label.configure(text="Connection Refused")
         skt.close()
         skt=socket.socket()
         popup.protocol("WM_DELETE_WINDOW",lambda: destroy(popup))
         return
     except TimeoutError:
-        connecting_label["text"]="Connection Timed Out"
+        connecting_label.configure(text="Connection Timed Out")
         skt.close()
         skt=socket.socket()   
         popup.protocol("WM_DELETE_WINDOW",lambda: destroy(popup))
@@ -605,7 +608,7 @@ def client_connection(connecting_label,popup):
     except OSError:
         skt.close()
         skt=socket.socket()
-        connecting_label["text"]="Incorrect IP/Port"
+        connecting_label.configure(text="Incorrect IP/Port")
         popup.protocol("WM_DELETE_WINDOW",lambda: destroy(popup))
         return
     try:
@@ -613,37 +616,37 @@ def client_connection(connecting_label,popup):
         firstrecv=skt.recv(1024).decode()
         if(firstrecv=='accepted'):
             connection_accepted=True
-            connecting_label["text"]="Connection Accepted\n(Close this window)"
-            connect_start["state"]="disabled"
-            file_button["state"]="normal"
-            selectfolder_button["state"]="normal"
-            stream_button["state"]="normal"
+            connecting_label.configure(text="Connection Accepted\n(Close this window)")
+            connect_start.configure(state="disabled")
+            file_button.configure(state="normal")
+            selectfolder_button.configure(state="normal")
+            stream_button.configure(state="normal")
             filename_var.set("No File Selected")
-            disconnect_button["state"]="normal"
-            dropdown["state"]="disabled"
-            ip1["state"]="disabled"
-            ip2["state"]="disabled"
-            ip3["state"]="disabled"
-            ip4["state"]="disabled"
-            port["state"]="disabled"
+            disconnect_button.configure(state="normal")
+            dropdown.configure(state="disabled")
+            ip1.configure(state="disabled")
+            ip2.configure(state="disabled")
+            ip3.configure(state="disabled")
+            ip4.configure(state="disabled")
+            port.configure(state="disabled")
             reciever_thread=th.Thread(target=reciever, args=())
             sender_thread=th.Thread(target=sender,args=())
             reciever_thread.start()
             sender_thread.start()
             popup.protocol("WM_DELETE_WINDOW",lambda: destroy(popup))
         else:
-            connecting_label["text"]="Connection Refused"
+            connecting_label.configure(text="Connection Refused")
             skt.close()
             skt=socket.socket()
             popup.protocol("WM_DELETE_WINDOW",lambda: destroy(popup))
     except ConnectionRefusedError:
-        connecting_label["text"]="Connection Refused"
+        connecting_label.configure(text="Connection Refused")
         skt.close()
         skt=socket.socket()
         popup.protocol("WM_DELETE_WINDOW",lambda: destroy(popup))
         return
     except TimeoutError:
-        connecting_label["text"]="Connection Timed Out"
+        connecting_label.configure(text="Connection Timed Out")
         skt.close()
         skt=socket.socket()
         popup.protocol("WM_DELETE_WINDOW",lambda: destroy(popup))
@@ -656,17 +659,17 @@ def acceptconn(popup_waitconnection):
     skt.sendall("accepted".encode())
     popup_waitconnection.destroy()
     popup_waitconnection.update()
-    connect_start["state"]="disabled"
-    file_button["state"]="normal"
+    connect_start.configure(state="disabled")
+    file_button.configure(state="normal")
     file_directory=str(os.path.abspath(os.getcwd()))
     filename_var.set("Location: "+file_directory)
-    disconnect_button["state"]="normal"
-    dropdown["state"]="disabled"
-    ip1["state"]="disabled"
-    ip2["state"]="disabled"
-    ip3["state"]="disabled"
-    ip4["state"]="disabled"
-    port["state"]="disabled"
+    disconnect_button.configure(state="normal")
+    dropdown.configure(state="disabled")
+    ip1.configure(state="disabled")
+    ip2.configure(state="disabled")
+    ip3.configure(state="disabled")
+    ip4.configure(state="disabled")
+    port.configure(state="disabled")
     reciever_thread=th.Thread(target=reciever, args=())
     sender_thread=th.Thread(target=sender,args=())
     reciever_thread.start()
@@ -691,42 +694,43 @@ def host_connection(pendingconnection_label,acceptconn_butt,rejectconn_butt):
         skt, incoming_addr=serverskt.accept()
     except OSError:
         return
-    pendingconnection_label["text"]='Accept Connection from'+str(incoming_addr).split(",")[0]+')?'
-    acceptconn_butt["state"]="normal"
-    rejectconn_butt["state"]="normal"
+    pendingconnection_label.configure(text='Accept Connection from'+str(incoming_addr).split(",")[0]+')?')
+    acceptconn_butt.configure(state="normal")
+    rejectconn_butt.configure(state="normal")
 def connect():
     global port_var,base
     if not(int(port_var.get())>=2000 and int(port_var.get())<=49151):
-        popup=tk.Toplevel(base)
+        popup=tk.CTkToplevel(base)
         popup.geometry("+%d+%d" %(base.winfo_x(),base.winfo_y()))
-        error_port_label=tk.Label(popup,text="Incorrect Port Number")
+        error_port_label=tk.CTkLabel(popup,text="Incorrect Port Number")
         error_port_label.pack()
         return
     if connect_start_var.get()=="Connect":
-        popup_attemptconnection=tk.Toplevel(base)
+        popup_attemptconnection=tk.CTkToplevel(base)
         popup_attemptconnection.geometry("+%d+%d" %(base.winfo_x(),base.winfo_y()))
         popup_attemptconnection.minsize(width=300,height=100)
         popup_attemptconnection.columnconfigure(index=0,minsize=100)
         popup_attemptconnection.rowconfigure(index=0,minsize=300)
-        connecting_label=tk.Label(popup_attemptconnection,text="",justify='center')
+        connecting_label=tk.CTkLabel(popup_attemptconnection,text="",justify='center')
         connecting_label.pack()
         popup_attemptconnection.grab_set()
         client_connection_thread=th.Thread(target=client_connection,args=(connecting_label,popup_attemptconnection,))
         client_connection_thread.start()
         popup_attemptconnection.protocol("WM_DELETE_WINDOW",donothing)
     else:
-        popup_waitconnection=tk.Toplevel(base)
+        popup_waitconnection=tk.CTkToplevel(base)
+        popup_waitconnection.title("temp")
         popup_waitconnection.geometry("+%d+%d" %(base.winfo_x(),base.winfo_y()))
         popup_waitconnection.minsize(width=300,height=100)
         popup_waitconnection.columnconfigure(0,minsize=150)
         popup_waitconnection.columnconfigure(1,minsize=150)
         popup_waitconnection.rowconfigure(0,minsize=50)
         popup_waitconnection.rowconfigure(1,minsize=50)
-        pendingconnection_label=tk.Label(popup_waitconnection,text='Waiting for Connection',justify="center")
+        pendingconnection_label=tk.CTkLabel(popup_waitconnection,text='Waiting for Connection',justify="center")
         pendingconnection_label.grid(row=0,column=0,columnspan=2,sticky='nsew')
-        acceptconn_butt=tk.Button(popup_waitconnection,justify='center',text='Yes',command=lambda: acceptconn(popup_waitconnection),state='disabled')
+        acceptconn_butt=tk.CTkButton(popup_waitconnection,text='Yes',command=lambda: acceptconn(popup_waitconnection),state='disabled')
         acceptconn_butt.grid(row=1,column=0,sticky='nsew',padx=10)
-        rejectconn_butt=tk.Button(popup_waitconnection,justify='center',text='No',command=lambda: rejectconn(popup_waitconnection),state='disabled')
+        rejectconn_butt=tk.CTkButton(popup_waitconnection,text='No',command=lambda: rejectconn(popup_waitconnection),state='disabled')
         rejectconn_butt.grid(row=1,column=1,sticky='nsew',padx=10)
         popup_waitconnection.protocol("WM_DELETE_WINDOW",lambda: rejectconn(popup_waitconnection))
         serverskt.bind((ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),int(port_var.get())))
@@ -734,13 +738,13 @@ def connect():
         popup_waitconnection.grab_set()
         server_connection_thread=th.Thread(target=host_connection,args=(pendingconnection_label,acceptconn_butt,rejectconn_butt))
         server_connection_thread.start()
-connect_start["command"]=connect
+connect_start.configure(command=connect)
 def getfile():
     global sendfile_button,filename_var,file_directory,folder_sending
-    if file_button["text"]=="Select File to Send":
+    if file_button.cget("text")=="Select File":
         temp_file_directory=askopenfilename()
         if temp_file_directory:
-            sendfile_button["state"]="normal"
+            sendfile_button.configure(state="normal")
             filename_var.set(temp_file_directory.split("/")[-1]+'\n('+str(os.path.getsize(temp_file_directory))+' Bytes)')
             file_directory=temp_file_directory
             folder_sending=False
@@ -749,12 +753,12 @@ def getfile():
         if download_location:
             filename_var.set("Location: "+download_location)
             file_directory=download_location
-file_button["command"]=getfile
+file_button.configure(command=getfile)
 def getfolder():
     global sendfile_button,filename_var,file_directory,folder_sending
     temp_file_directory=filedialog.askdirectory()
     if temp_file_directory:
-        sendfile_button["state"]="disabled"
+        sendfile_button.configure(state="disabled")
         file_directory=temp_file_directory
         temp_size=0
         for path, dirs, files in os.walk(file_directory):
@@ -762,13 +766,13 @@ def getfolder():
                 fp = os.path.join(path, f)
                 temp_size += os.path.getsize(fp)
         filename_var.set(temp_file_directory.split("/")[-1]+'\n('+str(temp_size)+' Bytes)')
-        sendfile_button["state"]="normal"
+        sendfile_button.configure(state="normal")
         folder_sending=True
-selectfolder_button["command"]=getfolder
+selectfolder_button.configure(command=getfolder)
 def sendfile():
     global sendfile_button,base,dropdown_var,popup_file,pendingconfirmation_label,filename_var,file_send_progressbar,filename
     global percentage_label
-    popup_file=tk.Toplevel(base)
+    popup_file=tk.CTkToplevel(base)
     popup_file.geometry("+%d+%d" %(base.winfo_x(),base.winfo_y()))
     popup_file.grab_set()
     if dropdown_var.get()=="Client(Send File)":
@@ -784,57 +788,58 @@ def sendfile():
     popup_file.rowconfigure(0,minsize=33)
     popup_file.rowconfigure(1,minsize=33)
     popup_file.rowconfigure(2,minsize=33)
-    pendingconfirmation_label=tk.Label(popup_file,text='Waiting for host to accept.',justify="center",wraplength=300)
-    pendingconfirmation_label.grid(row=0,column=0,columnspan=2,sticky='nsew')
+    pendingconfirmation_label=tk.CTkLabel(popup_file,text='Waiting for host to accept.',justify='center',wraplength=300,width=300)
+    pendingconfirmation_label.grid(row=0,column=0,columnspan=2)
     if dropdown_var.get()=="Host(Recieve File)":
         popup_file.rowconfigure(3,minsize=33)
         if folder_sending:
-            pendingconfirmation_label["text"]="Accept Folder(It will be created for you):\n  "+filename+"?"
+            pendingconfirmation_label.configure(text="Accept Folder(It will be created for you):\n  "+filename+"?")
         else:
-            pendingconfirmation_label["text"]="Accept File:  "+filename+"?"
-    file_send_progressbar=ttk.Progressbar(popup_file, orient="horizontal",length=250,mode="determinate")
+            pendingconfirmation_label.configure(text="Accept File:  "+filename+"?")
+    file_send_progressbar=tk.CTkProgressBar(popup_file, orientation="horizontal",width=250,mode="determinate")
+    file_send_progressbar.set(0.0)
     file_send_progressbar.grid(row=1,column=0,columnspan=2)
-    percentage_label=tk.Label(popup_file,text='0%',justify="center")
+    percentage_label=tk.CTkLabel(popup_file,text='0%',justify="center")
     percentage_label.grid(row=2,column=0,columnspan=2)
     if dropdown_var.get()=="Host(Recieve File)":
-        rejectfile_butt=tk.Button(popup_file,justify='center',text='Reject',command=lambda: rejectfile(dropdown_var))
+        rejectfile_butt=tk.CTkButton(popup_file,text='Reject',command=lambda: rejectfile(dropdown_var))
         rejectfile_butt.grid(row=3,column=1,sticky='nsew',padx=10)
-        acceptfile_butt=tk.Button(popup_file,justify='center',text='Accept',command=lambda: acceptfile(acceptfile_butt,rejectfile_butt))
+        acceptfile_butt=tk.CTkButton(popup_file,text='Accept',command=lambda: acceptfile(acceptfile_butt,rejectfile_butt))
         acceptfile_butt.grid(row=3,column=0,sticky='nsew',padx=10)
         if shutil.disk_usage(file_directory)[2]<int(filename.split('\n')[1][1:-7]):
-            acceptfile_butt["state"]="disabled"
+            acceptfile_butt.configure(state="disabled")
             if folder_sending:
-                pendingconfirmation_label["text"]="Accept Folder(It will be created for you):  "+filename+"?"+"(Not Enough Space in current directory)"
+                pendingconfirmation_label.configure(text="Accept Folder(It will be created for you):  "+filename+"?"+"(Not Enough Space in current directory)")
             else:
-                pendingconfirmation_label["text"]="Accept:  "+filename+"?"+"(Not Enough Space in current directory)"
+                pendingconfirmation_label.configure(text="Accept:  "+filename+"?"+"(Not Enough Space in current directory)")
     popup_file.protocol("WM_DELETE_WINDOW",donothing)
     return
-sendfile_button["command"]=sendfile
+sendfile_button.configure(command=sendfile)
 def acceptstream():
     global stream_popup,stream_label,stream_accept_button,stream_reject_button,streaming_var
     if dropdown_var.get()=="Client(Send File)":
-        stream_label["text"]="Host Accepted Stream"
-        stop_stream_button["state"]="normal"
+        stream_label.configure(text="Host Accepted Stream")
+        stop_stream_button.configure(state="normal")
         streaming_var=True
         stream_client=th.Thread(target=client_streaming,args=())
         stream_client.start()
     else:
         streaming_var=True
         sending_queue.put("<<ACCEPTSTREAM>>".encode())
-        stream_label["text"]="Stream Accepted(Close this window to end stream)"
+        stream_label.configure(text="Stream Accepted(Close this window to end stream)")
         stream_popup.protocol("WM_DELETE_WINDOW",lambda: stop_stream())
         stream_host=th.Thread(target=host_streaming,args=())
-        stream_accept_button["state"]="disabled"
-        stream_reject_button["state"]="disabled"
+        stream_accept_button.configure(state="disabled")
+        stream_reject_button.configure(state="disabled")
         stream_host.start()
 def rejectstream():
     global stream_popup,stream_label,stream_accept_button,stream_reject_button
     if dropdown_var.get()=="Client(Send File)":
-        stream_label["text"]="Host Rejected Stream"
-        start_stream_button["state"]="normal"
-        video_stream_check["state"]="normal"
-        mic_stream_check["state"]="normal"
-        system_audio_stream_check["state"]="normal"
+        stream_label.configure(text="Host Rejected Stream")
+        start_stream_button.configure(state="normal")
+        video_stream_check.configure(state="normal")
+        mic_stream_check.configure(state="normal")
+        system_audio_stream_check.configure(state="normal")
         stream_popup.protocol("WM_DELETE_WINDOW",lambda: destroy(stream_popup))
     else:
         sending_queue.put("<<REJECTSTREAM>>".encode())
@@ -850,22 +855,22 @@ def stop_stream():
         if system_audio_stream_var.get():
             stop_system_audio_event.set()
         stream_popup.protocol("WM_DELETE_WINDOW",lambda: destroy(stream_popup))
-        start_stream_button["state"]="normal"
-        video_stream_check["state"]="normal"
-        mic_stream_check["state"]="normal"
-        system_audio_stream_check["state"]="normal"
-        stop_stream_button["state"]="disabled"
+        start_stream_button.configure(state="normal")
+        video_stream_check.configure(state="normal")
+        mic_stream_check.configure(state="normal")
+        system_audio_stream_check.configure(state="normal")
+        stop_stream_button.configure(state="disabled")
         if streaming_var:
             streaming_var=False
             sending_queue.put("<<ENDSTREAM>>".encode())
-            stream_label["text"]="Stream Stopped"
+            stream_label.configure(text="Stream Stopped")
         else:
-            stream_label["text"]="Stream Stopped-Host closed the stream"
+            stream_label.configure(text="Stream Stopped-Host closed the stream")
     else:
-        file_status["text"]="Stream Ended by Client"
+        file_status.configure(text="Stream Ended by Client")
         if streaming_var:
             streaming_var=False
-            file_status["text"]="Stream Ended"
+            file_status.configure(text="Stream Ended")
             sending_queue.put("<<ENDSTREAM>>".encode())
         if video_stream_var_recv:
             video_stream_reciever.stop_server()
@@ -878,11 +883,11 @@ def stop_stream():
 def start_stream():
     global video_stream_var,mic_stream_var,system_audio_stream_var,video_stream_check,mic_stream_check,system_audio_stream_check
     stream_popup.protocol("WM_DELETE_WINDOW",donothing)
-    stream_label["text"]="Waiting for Host to accept Stream."
-    start_stream_button["state"]="disabled"
-    video_stream_check["state"]="disabled"
-    mic_stream_check["state"]="disabled"
-    system_audio_stream_check["state"]="disabled"
+    stream_label.configure(text="Waiting for Host to accept Stream.")
+    start_stream_button.configure(state="disabled")
+    video_stream_check.configure(state="disabled")
+    mic_stream_check.configure(state="disabled")
+    system_audio_stream_check.configure(state="disabled")
     str1="<<REQUESTSTREAM>>"
     if video_stream_var.get():
         str1+="<<V>>"
@@ -894,16 +899,16 @@ def start_stream():
     sending_queue.put(str1.encode())
 def streamcallback(*args):
     if video_stream_var.get() or mic_stream_var.get() or system_audio_stream_var.get():
-        start_stream_button["state"]="normal"
+        start_stream_button.configure(state="normal")
     else:
-        start_stream_button["state"]="disabled"
+        start_stream_button.configure(state="disabled")
 def stream(data=None):
     global base,stream_popup,stream_label,stream_accept_button,stream_reject_button,default_speakers,video_stream_var_recv,mic_stream_var_recv,system_audio_stream_var_recv
     global start_stream_button,stop_stream_button,video_stream_check,mic_stream_check,system_audio_stream_check,received_rate
-    stream_popup=tk.Toplevel(base)
+    stream_popup=tk.CTkToplevel(base)
     stream_popup.grab_set()
     stream_popup.geometry("+%d+%d" %(base.winfo_x(),base.winfo_y()))
-    stream_label=tk.Label(stream_popup,text="",justify="center")
+    stream_label=tk.CTkLabel(stream_popup,text="",justify="center")
     if dropdown_var.get()!="Client(Send File)":
         stream_popup.protocol("WM_DELETE_WINDOW",donothing)
         video_stream_var_recv=False
@@ -915,26 +920,26 @@ def stream(data=None):
         stream_popup.rowconfigure(1,minsize=50)
         stream_popup.columnconfigure(0,minsize=150)
         stream_popup.columnconfigure(1,minsize=150)
-        stream_label["text"]="Accept Stream(Contains:"
+        stream_label_string="Accept Stream(Contains:"
         tempvariable=19
         if data[tempvariable]=='V':
-            stream_label["text"]+="Video"
+            stream_label_string+="Video"
             tempvariable+=5
             video_stream_var_recv=True
         if len(data)>tempvariable and data[tempvariable]=='M':
-            stream_label["text"]+=",Mic Audio"
+            stream_label_string+=",Mic Audio"
             tempvariable+=5
             mic_stream_var_recv=True
         if len(data)>tempvariable and data[tempvariable]=='S':
-            stream_label["text"]+=",System Audio"
+            stream_label_string+=",System Audio"
             tempvariable+=5
             system_audio_stream_var_recv=True
-            print(data[tempvariable+1:len(data)-3])
             received_rate=float(data[tempvariable+1:len(data)-3])
-        stream_label["text"]+=")?"
-        stream_accept_button=tk.Button(stream_popup,text="Accept",justify="center",command=acceptstream)
+        stream_label_string+=")?"
+        stream_label.configure(text=stream_label_string)
+        stream_accept_button=tk.CTkButton(stream_popup,text="Accept",command=acceptstream)
         stream_accept_button.grid(row=1,column=0,sticky="nsew")
-        stream_reject_button=tk.Button(stream_popup,text="Reject",justify="center",command=rejectstream)
+        stream_reject_button=tk.CTkButton(stream_popup,text="Reject",command=rejectstream)
         stream_reject_button.grid(row=1,column=1,sticky="nsew")
     else:
         stream_popup.minsize(300,150)
@@ -944,20 +949,20 @@ def stream(data=None):
         stream_popup.columnconfigure(0,minsize=100)
         stream_popup.columnconfigure(1,minsize=100)
         stream_popup.columnconfigure(2,minsize=100)
-        stream_label["text"]="Confirm Settings"
-        start_stream_button=tk.Button(stream_popup,text="Start Stream",justify="center",command=start_stream,state='disabled')
+        stream_label.configure(text="Confirm Settings")
+        start_stream_button=tk.CTkButton(stream_popup,text="Start Stream",command=start_stream,state='disabled')
         start_stream_button.grid(row=2,column=0,columnspan=1)
-        stop_stream_button=tk.Button(stream_popup,text="Stop Stream",justify="center",command=stop_stream,state='disabled')
+        stop_stream_button=tk.CTkButton(stream_popup,text="Stop Stream",command=stop_stream,state='disabled')
         stop_stream_button.grid(row=2,column=2,columnspan=1)
         video_stream_var.set(0)
         mic_stream_var.set(0)
         system_audio_stream_var.set(0)
         stream_label.grid(row=0,column=0,columnspan=3,pady=10)
-        video_stream_check=tk.Checkbutton(stream_popup,variable=video_stream_var,text="Video")
+        video_stream_check=tk.CTkCheckBox(stream_popup,variable=video_stream_var,text="Video")
         video_stream_check.grid(row=1,column=0)
-        mic_stream_check=tk.Checkbutton(stream_popup,text="Microphone Audio",variable=mic_stream_var)
+        mic_stream_check=tk.CTkCheckBox(stream_popup,text="Microphone Audio",variable=mic_stream_var)
         mic_stream_check.grid(row=1,column=1)
-        system_audio_stream_check=tk.Checkbutton(stream_popup,text="System Audio",variable=system_audio_stream_var,state='disabled')
+        system_audio_stream_check=tk.CTkCheckBox(stream_popup,text="System Audio",variable=system_audio_stream_var,state='disabled')
         system_audio_stream_check.grid(row=1,column=2)
         try:
             wasapi_info = pyaudiowpatch.PyAudio().get_host_api_info_by_type(pyaudiowpatch.paWASAPI)
@@ -968,29 +973,29 @@ def stream(data=None):
             for loopback in pyaudiowpatch.PyAudio().get_loopback_device_info_generator():
                 if default_speakers["name"] in loopback["name"]:
                     default_speakers = loopback
-                    system_audio_stream_check["state"]="normal"
+                    system_audio_stream_check.configure(state="normal")
                     break
             else:
                 return
-stream_button["command"]=stream
+stream_button.configure(command=stream)
 video_stream_var.trace_add(mode="write",callback=streamcallback)
 mic_stream_var.trace_add(mode="write",callback=streamcallback)
 system_audio_stream_var.trace_add(mode="write",callback=streamcallback)
 def disconnect():
     global serverskt,skt,start_disconnect
-    connect_start["state"]="normal"
-    disconnect_button["state"]="disabled"
-    file_button["state"]="disabled"
-    selectfolder_button["state"]="disabled"
-    sendfile_button["state"]="disabled"
-    stream_button["state"]="disabled"
-    dropdown["state"]="normal"
+    connect_start.configure(state="normal")
+    disconnect_button.configure(state="disabled")
+    file_button.configure(state="disabled")
+    selectfolder_button.configure(state="disabled")
+    sendfile_button.configure(state="disabled")
+    stream_button.configure(state="disabled")
+    dropdown.configure(state="normal")
     filename_var.set("Disconnected")
     if dropdown_var.get()=='Client(Send File)':
-        ip1["state"]="normal"
-        ip2["state"]="normal"
-        ip3["state"]="normal"
-        ip4["state"]="normal"
+        ip1.configure(state="normal")
+        ip2.configure(state="normal")
+        ip3.configure(state="normal")
+        ip4.configure(state="normal")
         skt.close()
         skt=socket.socket()
     else:
@@ -1002,8 +1007,8 @@ def disconnect():
             skt=socket.socket()
             serverskt.close()
             serverskt=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-    port["state"]="normal"
-disconnect_button["command"]=disconnect
+    port.configure(state="normal")
+disconnect_button.configure(command=disconnect)
 def endprogram():
     global base
     base.destroy()
