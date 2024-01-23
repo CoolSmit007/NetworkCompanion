@@ -587,8 +587,9 @@ port_var.trace_add("write",callback=check_connectstart)
 def client_connection(connecting_label,popup):
     global skt,connection_accepted,reciever_thread,sender_thread
     try:
-        skt.connect((ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),int(port_var.get())))
         connecting_label["text"]='Connecting...'+"\n(Your Address : "+get_ip_address()[0]+")"
+        connecting_label.update()
+        skt.connect((ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),int(port_var.get())))
     except ConnectionRefusedError:
         connecting_label["text"]="Connection Refused"
         skt.close()
@@ -837,7 +838,7 @@ def rejectstream():
         stream_popup.protocol("WM_DELETE_WINDOW",lambda: destroy(stream_popup))
     else:
         sending_queue.put("<<REJECTSTREAM>>".encode())
-        stream_popup.destory()
+        stream_popup.destroy()
         stream_popup.update()
 def stop_stream():
     global streaming_var,video_stream_sender,mic_audio_stream_sender,video_stream_reciever,mic_audio_stream_reciever,system_audio_reciever
