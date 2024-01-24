@@ -71,6 +71,14 @@ system_audio_socket=None
 stop_system_audio_event=th.Event()
 stop_system_audio_event.set()
 received_rate=None
+pause_transfer_button=None
+stop_transfer_button=None
+pause_file_send=th.Event()
+pause_file_send.set()
+stop_file_send=th.Event()
+stop_file_send.set()
+stop_file_recv=th.Event()
+stop_file_recv.set()
 # Streaming Functions
 def send_system_audio(in_data, frame_count, time_info, status):
     global system_audio_socket
@@ -124,12 +132,17 @@ def host_streaming():
 # File Send Function
 def file_send():    
     global file_send_progressbar,file_send_event,ack_counter_send,file_directory,folder_sending,file
+    global pause_file_send,stop_file_send
     first_time=True
+    stop_file_send.set()
+    pause_file_send.set()
     if folder_sending:
         size=filename_var.get().split("\n")[1]
         size=int(size[1:-7])
         totalsize=size
         sent=0
+        pause_transfer_button.configure(state="normal")
+        stop_transfer_button.configure(state="normal")
         for path, dirs, files in os.walk(file_directory):
             for f in files:
                 ack_counter_send=0
@@ -164,6 +177,31 @@ def file_send():
                     print("error-"+check_ack_recv.decode())
                 # print("Recieved ACK")
                 while data:=file.read(send_size):
+                    if not pause_file_send.is_set():
+                        if len(data)<len("<<PAUSETRANSFER>>".encode()) or len(data)<len("<<RESUMETRANSFER>>".encode()):
+                            pause_file_send.set()
+                        else:
+                            pendingconfirmation_label.configure(text="Folder transfer Paused")
+                            skt.sendall("<<PAUSETRANSFER>>".encode())
+                            pause_transfer_button.configure(text="Resume")
+                            pause_file_send.wait()
+                            if stop_file_send.is_set():
+                                skt.sendall("<<RESUMETRANSFER>>".encode())
+                                pause_transfer_button.configure(text="Pause")
+                                pendingconfirmation_label.configure(text="Sending...")
+                    if not stop_file_send.is_set():
+                        if len(data)<len("<<STOPTRANSFER>>".encode()):
+                            stop_file_send.set()
+                        else:
+                            skt.sendall("<<STOPTRANSFER>>".encode())
+                            file.close()
+                            pendingconfirmation_label.configure(text="Folder transfer Cancelled\n(You can close this window)")
+                            popup_file.protocol("WM_DELETE_WINDOW",lambda: destroy(popup_file))
+                            file_send_event.set()
+                            stop_file_send.set()
+                            pause_transfer_button.configure(state="disabled")
+                            stop_transfer_button.configure(state="disabled")
+                            return
                     select.select([],[skt.fileno()],[])
                     skt.sendall(data)
                     ack_counter_send+=1
@@ -195,7 +233,35 @@ def file_send():
         sent=0
         first_time=True
         ack_counter_send=0
+        pause_transfer_button.configure(state="normal")
+        stop_transfer_button.configure(state="normal")
         while data:=file.read(send_size):
+            if not pause_file_send.is_set():
+                    if len(data)<len("<<PAUSETRANSFER>>".encode()) or len(data)<len("<<RESUMETRANSFER>>".encode()):
+                        pause_file_send.set()
+                    else:
+                        pendingconfirmation_label.configure(text="File transfer Paused")
+                        skt.sendall("<<PAUSETRANSFER>>".encode())
+                        pause_transfer_button.configure(text="Resume")
+                        pause_file_send.wait()
+                        if stop_file_send.is_set():
+                            skt.sendall("<<RESUMETRANSFER>>".encode())
+                            pause_transfer_button.configure(text="Pause")
+                            pendingconfirmation_label.configure(text="Sending...")
+            if not stop_file_send.is_set():
+                if len(data)<len("<<STOPTRANSFER>>".encode()):
+                    stop_file_send.set()
+                else:
+                    pause_file_send.set()
+                    skt.sendall("<<STOPTRANSFER>>".encode())
+                    file.close()
+                    pendingconfirmation_label.configure(text="File transfer Cancelled\n(You can close this window)")
+                    popup_file.protocol("WM_DELETE_WINDOW",lambda: destroy(popup_file))
+                    file_send_event.set()
+                    stop_file_send.set()
+                    pause_transfer_button.configure(state="disabled")
+                    stop_transfer_button.configure(state="disabled")
+                    return
             if first_time:
                 file_send_event.clear()
                 sending_queue.put(data)
@@ -226,8 +292,10 @@ def file_send():
     return
 # File Recieve Function
 def file_recieve(initialdata):
-    global filename,sending_queue,ack_counter_send,file_directory,file,folder_sending
+    global filename,sending_queue,ack_counter_send,file_directory,file,folder_sending,stop_transfer_button
     first_time=True
+    stop_file_send.set()
+    pause_file_send.set()
     if folder_sending:
         ack_counter_send=0
         size=filename.split("\n")[1]
@@ -275,6 +343,37 @@ def file_recieve(initialdata):
             while temp_sizeoffile:
                 select.select([skt.fileno()],[],[])
                 data=skt.recv(min(recieve_size,temp_sizeoffile))
+                try:
+                    if data.decode()=="<<PAUSETRANSFER>>":
+                        pause_file_send.clear()
+                    elif data.decode()=="<<STOPTRANSFER>>":
+                        stop_file_send.clear()
+                except UnicodeDecodeError:
+                    pass
+                if not pause_file_send.is_set():
+                    pendingconfirmation_label.configure(text="Folder transfer Paused by Client")
+                    select.select([skt.fileno()],[],[])
+                    data=skt.recv(min(recieve_size,temp_sizeoffile))
+                    try:
+                        if data.decode()=="<<RESUMETRANSFER>>":
+                            pause_file_send.set()
+                            pendingconfirmation_label.configure(text="Receiving...")
+                            select.select([skt.fileno()],[],[])
+                            data=skt.recv(min(recieve_size,temp_sizeoffile))
+                        elif data.decode()=="<<STOPTRANSFER>>":
+                            pause_file_send.set()
+                            stop_file_send.clear()
+                    except UnicodeDecodeError:
+                        pass
+                if not stop_file_send.is_set():
+                    file.close()
+                    pendingconfirmation_label.configure(text="Folder transfer Cancelled\n(You can close this window)")
+                    file_status.configure(text="Folder Tranfer Unsuccessful")
+                    popup_file.protocol("WM_DELETE_WINDOW",lambda: destroy(popup_file))
+                    file_send_event.set()
+                    stop_file_send.set()
+                    folder_sending=False
+                    return
                 if data:
                     file.write(data)
                     ack_counter_send_checker-=len(data)
@@ -316,6 +415,34 @@ def file_recieve(initialdata):
         while size:
             select.select([skt.fileno()],[],[])
             data=skt.recv(min(recieve_size,size))
+            try:
+                if data.decode()=="<<PAUSETRANSFER>>":
+                    pause_file_send.clear()
+                elif data.decode()=="<<STOPTRANSFER>>":
+                    stop_file_send.clear()
+            except UnicodeDecodeError:
+                pass
+            if not pause_file_send.is_set():
+                pendingconfirmation_label.configure(text="File transfer Paused by Client")
+                select.select([skt.fileno()],[],[])
+                data=skt.recv(min(recieve_size,size))
+                if data.decode()=="<<RESUMETRANSFER>>":
+                    pause_file_send.set()
+                    pendingconfirmation_label.configure(text="Receiving...")
+                    select.select([skt.fileno()],[],[])
+                    data=skt.recv(min(recieve_size,size))
+                elif data.decode()=="<<STOPTRANSFER>>":
+                    pause_file_send.set()
+                    stop_file_send.clear()
+            if not stop_file_send.is_set():
+                pause_file_send.set()
+                file.close()
+                pendingconfirmation_label.configure(text="File transfer Cancelled\n(You can close this window)")
+                file_status.configure(text="File Tranfer Unsuccessful")
+                popup_file.protocol("WM_DELETE_WINDOW",lambda: destroy(popup_file))
+                file_send_event.set()
+                stop_file_send.set()
+                return
             if data:
                 file.write(data)
                 size-=len(data)
@@ -356,7 +483,7 @@ def rejectfile(dropdown_var):
         pendingconfirmation_label.configure(text="Host Rejected(You can close this Window)")
         popup_file.protocol("WM_DELETE_WINDOW",lambda : destroy(popup_file))
 def acceptfile(acceptfile_butt,rejectfile_butt):
-    global file,file_directory,pendingconfirmation_label,filename
+    global file,file_directory,pendingconfirmation_label,filename,popup_file,stop_transfer_button
     if dropdown_var.get()=="Client(Send File)":
         if folder_sending:
             pendingconfirmation_label.configure(text="Sending...")
@@ -379,11 +506,10 @@ def acceptfile(acceptfile_butt,rejectfile_butt):
         sending_queue.put("<<ACCEPTFILE>>".encode())
         acceptfile_butt.configure(state="disabled")
         rejectfile_butt.configure(state="disabled")
-        # file_recieve_thread=th.Thread(target=file_recieve,args=())
-        # file_recieve_thread.start()
 # Sender/Reciever Working
 def reciever():
     global skt,start_disconnect,reciever_queue,recieve_size,filename,ack_counter_send,folder_sending,streaming_var
+    global pause_file_send,stop_file_send
     while True:
         try:
             select.select([skt.fileno()],[],[])
@@ -769,29 +895,37 @@ def getfolder():
         sendfile_button.configure(state="normal")
         folder_sending=True
 selectfolder_button.configure(command=getfolder)
+def pausetransfer():
+    global pause_file_send
+    if pause_file_send.is_set():
+        pause_file_send.clear()
+    else:
+        pause_file_send.set()
+def stoptransfer():
+    global stop_file_send
+    stop_file_send.clear()
+    pause_file_send.set()
 def sendfile():
     global sendfile_button,base,dropdown_var,popup_file,pendingconfirmation_label,filename_var,file_send_progressbar,filename
-    global percentage_label
+    global percentage_label,stop_transfer_button,pause_transfer_button
     popup_file=tk.CTkToplevel(base)
     popup_file.geometry("+%d+%d" %(base.winfo_x(),base.winfo_y()))
     popup_file.grab_set()
     if dropdown_var.get()=="Client(Send File)":
-        popup_file.minsize(width=300,height=100)
         if folder_sending:
             sending_queue.put(("<<FOLDERREQUEST>>//"+filename_var.get()).encode())
         else:
             sending_queue.put(("<<FILEREQUEST>>//"+filename_var.get()).encode())
-    else:
-        popup_file.minsize(width=300,height=133)
+    popup_file.minsize(width=300,height=133)
     popup_file.columnconfigure(0,minsize=150)
     popup_file.columnconfigure(1,minsize=150)
     popup_file.rowconfigure(0,minsize=33)
     popup_file.rowconfigure(1,minsize=33)
     popup_file.rowconfigure(2,minsize=33)
+    popup_file.rowconfigure(3,minsize=33)
     pendingconfirmation_label=tk.CTkLabel(popup_file,text='Waiting for host to accept.',justify='center',wraplength=300,width=300)
     pendingconfirmation_label.grid(row=0,column=0,columnspan=2)
     if dropdown_var.get()=="Host(Recieve File)":
-        popup_file.rowconfigure(3,minsize=33)
         if folder_sending:
             pendingconfirmation_label.configure(text="Accept Folder(It will be created for you):\n  "+filename+"?")
         else:
@@ -812,6 +946,11 @@ def sendfile():
                 pendingconfirmation_label.configure(text="Accept Folder(It will be created for you):  "+filename+"?"+"(Not Enough Space in current directory)")
             else:
                 pendingconfirmation_label.configure(text="Accept:  "+filename+"?"+"(Not Enough Space in current directory)")
+    else:
+        pause_transfer_button=tk.CTkButton(popup_file,text='Pause',command=lambda: pausetransfer(),state="disabled")
+        pause_transfer_button.grid(row=3,column=0,sticky="nsew",padx=10)
+        stop_transfer_button=tk.CTkButton(popup_file,text='Cancel',command=lambda: stoptransfer(),state="disabled")
+        stop_transfer_button.grid(row=3,column=1,sticky="nsew",padx=10)
     popup_file.protocol("WM_DELETE_WINDOW",donothing)
     return
 sendfile_button.configure(command=sendfile)
