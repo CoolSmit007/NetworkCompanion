@@ -11,7 +11,7 @@ import queue as Q
 import shutil
 from vidstream import AudioReceiver,AudioSender,ScreenShareClient,StreamingServer
 import pyaudiowpatch
-import time
+from screeninfo import get_monitors
 def donothing():
     pass
 def destroy(window):
@@ -79,6 +79,20 @@ stop_file_send=th.Event()
 stop_file_send.set()
 stop_file_recv=th.Event()
 stop_file_recv.set()
+max_x_res=0
+max_y_res=0
+for m in get_monitors():
+    if m.is_primary:
+        max_x_res=m.width
+        max_y_res=m.height
+        break
+video_stream_res_x_var=tk.StringVar()
+video_stream_res_y_var=tk.StringVar()
+video_stream_res_x_entry=None
+video_stream_res_y_entry=None
+video_stream_res_x_label=None
+video_stream_res_y_label=None
+video_stream_label=None
 # Streaming Functions
 def send_system_audio(in_data, frame_count, time_info, status):
     global system_audio_socket
@@ -109,7 +123,7 @@ def system_audio_sender():
 def client_streaming():
     global video_stream_sender,mic_audio_stream_sender,system_audio_stream_sender_thread
     if video_stream_var.get():
-        video_stream_sender=ScreenShareClient(host=ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),port=1600,x_res=1024,y_res=720)
+        video_stream_sender=ScreenShareClient(host=ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),port=1600,x_res=int(video_stream_res_x_var.get()),y_res=int(video_stream_res_y_var.get()))
         video_stream_sender.start_stream()
     if mic_stream_var.get():
         mic_audio_stream_sender=AudioSender(host=ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),port=1700)
@@ -652,6 +666,7 @@ def validateport(value):
 validateipreg=base.register(validateip)
 validateportreg=base.register(validateport)
 # Elements
+base.rowconfigure(index=1,minsize=50)
 dropdown_var = tk.StringVar(value="Select User")
 dropdown_label = tk.CTkLabel(base, text="Host")
 dropdown=tk.CTkOptionMenu(base,variable=dropdown_var,values=["Host(Recieve File)","Client(Send File)"],command=dropdown_check)
@@ -827,12 +842,16 @@ def connect():
     global port_var,base
     if not(int(port_var.get())>=2000 and int(port_var.get())<=49151):
         popup=tk.CTkToplevel(base)
+        popup.resizable(False,False)
+        popup.title("Connection")
         popup.geometry("+%d+%d" %(base.winfo_x(),base.winfo_y()))
         error_port_label=tk.CTkLabel(popup,text="Incorrect Port Number")
         error_port_label.pack()
         return
     if connect_start_var.get()=="Connect":
         popup_attemptconnection=tk.CTkToplevel(base)
+        popup_attemptconnection.resizable(False,False)
+        popup_attemptconnection.title("Connection")
         popup_attemptconnection.geometry("+%d+%d" %(base.winfo_x(),base.winfo_y()))
         popup_attemptconnection.minsize(width=300,height=100)
         popup_attemptconnection.columnconfigure(index=0,minsize=100)
@@ -845,7 +864,8 @@ def connect():
         popup_attemptconnection.protocol("WM_DELETE_WINDOW",donothing)
     else:
         popup_waitconnection=tk.CTkToplevel(base)
-        popup_waitconnection.title("temp")
+        popup_waitconnection.resizable(False,False)
+        popup_waitconnection.title("Connection")
         popup_waitconnection.geometry("+%d+%d" %(base.winfo_x(),base.winfo_y()))
         popup_waitconnection.minsize(width=300,height=100)
         popup_waitconnection.columnconfigure(0,minsize=150)
@@ -909,6 +929,8 @@ def sendfile():
     global sendfile_button,base,dropdown_var,popup_file,pendingconfirmation_label,filename_var,file_send_progressbar,filename
     global percentage_label,stop_transfer_button,pause_transfer_button
     popup_file=tk.CTkToplevel(base)
+    popup_file.resizable(False,False)
+    popup_file.title("File/Folder Transfer")
     popup_file.geometry("+%d+%d" %(base.winfo_x(),base.winfo_y()))
     popup_file.grab_set()
     if dropdown_var.get()=="Client(Send File)":
@@ -1036,15 +1058,42 @@ def start_stream():
         str1+="<<S>>"
         str1+="<<<"+str(default_speakers["defaultSampleRate"])+">>>"
     sending_queue.put(str1.encode())
+def number_check(value):
+    if str.isdigit(value) or value == "":
+        return True
+    else:
+        return False
+number_validate=base.register(number_check)
 def streamcallback(*args):
-    if video_stream_var.get() or mic_stream_var.get() or system_audio_stream_var.get():
-        start_stream_button.configure(state="normal")
+    global video_stream_res_x_entry,video_stream_res_y_entry,video_stream_res_x_var,video_stream_res_y_var
+    if mic_stream_var.get() or system_audio_stream_var.get():
+        if (video_stream_var.get() and video_stream_res_y_var.get() and video_stream_res_x_var.get() and int(video_stream_res_y_var.get())>=720 and int(video_stream_res_y_var.get())<=max_y_res and int(video_stream_res_x_var.get())>=1024 and int(video_stream_res_x_var.get())<=max_x_res):
+            start_stream_button.configure(state="normal")
+        elif not video_stream_var.get():
+            start_stream_button.configure(state="normal")
+        else:
+            start_stream_button.configure(state="disabled")
     else:
         start_stream_button.configure(state="disabled")
+    if video_stream_var.get():
+        video_stream_res_x_entry.grid(row=3,column=0)
+        video_stream_res_y_entry.grid(row=3,column=1)
+        video_stream_label.grid(row=3,column=2,rowspan=2)
+        video_stream_res_x_label.grid(row=4,column=0)
+        video_stream_res_y_label.grid(row=4,column=1)
+    else:
+        video_stream_res_x_entry.grid_forget()
+        video_stream_res_y_entry.grid_forget()
+        video_stream_label.grid_forget()
+        video_stream_res_x_label.grid_forget()
+        video_stream_res_y_label.grid_forget()
 def stream(data=None):
     global base,stream_popup,stream_label,stream_accept_button,stream_reject_button,default_speakers,video_stream_var_recv,mic_stream_var_recv,system_audio_stream_var_recv
     global start_stream_button,stop_stream_button,video_stream_check,mic_stream_check,system_audio_stream_check,received_rate
+    global video_stream_res_x_entry,video_stream_res_y_entry,video_stream_label,video_stream_res_x_label,video_stream_res_y_label
     stream_popup=tk.CTkToplevel(base)
+    stream_popup.resizable(False,False)
+    stream_popup.title("Stream")
     stream_popup.grab_set()
     stream_popup.geometry("+%d+%d" %(base.winfo_x(),base.winfo_y()))
     stream_label=tk.CTkLabel(stream_popup,text="",justify="center")
@@ -1081,10 +1130,16 @@ def stream(data=None):
         stream_reject_button=tk.CTkButton(stream_popup,text="Reject",command=rejectstream)
         stream_reject_button.grid(row=1,column=1,sticky="nsew")
     else:
-        stream_popup.minsize(300,150)
+        stream_popup.minsize(300,200)
         stream_popup.rowconfigure(0,minsize=50)
         stream_popup.rowconfigure(1,minsize=50)
         stream_popup.rowconfigure(2,minsize=50)
+        stream_popup.rowconfigure(3,minsize=50)
+        video_stream_res_x_entry=tk.CTkEntry(stream_popup,textvariable=video_stream_res_x_var,placeholder_text="X-Res",validate="all",validatecommand=(number_validate,'%P'))
+        video_stream_res_y_entry=tk.CTkEntry(stream_popup,textvariable=video_stream_res_y_var,placeholder_text="Y-Res",validate="all",validatecommand=(number_validate,'%P'))
+        video_stream_label=tk.CTkLabel(stream_popup,text="X-Res (1024-"+str(max_x_res)+")\nY-Res (720-"+str(max_y_res)+")")
+        video_stream_res_x_label=tk.CTkLabel(stream_popup,text="X-Res")
+        video_stream_res_y_label=tk.CTkLabel(stream_popup,text="Y-Res")
         stream_popup.columnconfigure(0,minsize=100)
         stream_popup.columnconfigure(1,minsize=100)
         stream_popup.columnconfigure(2,minsize=100)
@@ -1101,7 +1156,7 @@ def stream(data=None):
         video_stream_check.grid(row=1,column=0)
         mic_stream_check=tk.CTkCheckBox(stream_popup,text="Microphone Audio",variable=mic_stream_var)
         mic_stream_check.grid(row=1,column=1)
-        system_audio_stream_check=tk.CTkCheckBox(stream_popup,text="System Audio",variable=system_audio_stream_var,state='disabled')
+        system_audio_stream_check=tk.CTkCheckBox(stream_popup,text="System Audio",variable=system_audio_stream_var,state="disabled")
         system_audio_stream_check.grid(row=1,column=2)
         try:
             wasapi_info = pyaudiowpatch.PyAudio().get_host_api_info_by_type(pyaudiowpatch.paWASAPI)
@@ -1117,6 +1172,8 @@ def stream(data=None):
             else:
                 return
 stream_button.configure(command=stream)
+video_stream_res_x_var.trace_add(mode="write",callback=streamcallback)
+video_stream_res_y_var.trace_add(mode="write",callback=streamcallback)
 video_stream_var.trace_add(mode="write",callback=streamcallback)
 mic_stream_var.trace_add(mode="write",callback=streamcallback)
 system_audio_stream_var.trace_add(mode="write",callback=streamcallback)
