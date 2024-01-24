@@ -237,7 +237,7 @@ def file_send():
                     print("error-"+check_ack_recv.decode())
                 # print("Recieved ACK")
                 file.close()
-        pendingconfirmation_label.configure(text="Folder Sent")
+        pendingconfirmation_label.configure(text="Folder Sent(You can close this window now)")
         popup_file.protocol("WM_DELETE_WINDOW",lambda: destroy(popup_file))
         file_send_event.set()
     else:
@@ -300,9 +300,11 @@ def file_send():
         if check_ack_recv.decode()!="<<ACK>>":
             print("error-"+check_ack_recv.decode())
         file.close()
-        pendingconfirmation_label.configure(text="File Sent")
+        pendingconfirmation_label.configure(text="File Sent(You can close this window now)")
         popup_file.protocol("WM_DELETE_WINDOW",lambda: destroy(popup_file))
         file_send_event.set()
+    stop_transfer_button.configure(state="disabled")
+    pause_transfer_button.configure(state="disabled")
     return
 # File Recieve Function
 def file_recieve(initialdata):
@@ -410,7 +412,7 @@ def file_recieve(initialdata):
                 # print("Sent ACK of EOF")
             file.close()
         folder_sending=False
-        pendingconfirmation_label.configure(text="Folder Recieved")
+        pendingconfirmation_label.configure(text="Folder Recieved(You can close this window now)")
         popup_file.protocol("WM_DELETE_WINDOW",lambda: destroy(popup_file))
         file_status.configure(text="Status: Folder Recieved Succesfully")
         file_send_event.set()
@@ -481,7 +483,7 @@ def file_recieve(initialdata):
             select.select([],[skt.fileno()],[])
             skt.sendall("<<ACK>>".encode())
         file.close()
-        pendingconfirmation_label.configure(text="File Recieved")
+        pendingconfirmation_label.configure(text="File Recieved(You can close this window now)")
         popup_file.protocol("WM_DELETE_WINDOW",lambda: destroy(popup_file))
         file_status.configure(text="Status: File Recieved Succesfully")
         file_send_event.set()
@@ -606,14 +608,14 @@ def dropdown_check(value):
         port_var.set('')
         port.configure(state="normal")
         filename_var.set("Disconnected")
-        ipaddr_text.configure(text='Enter IP Address of Host\n(Values between 0-255)')
-        port_text.configure(text='Enter Port of Host\n(Value between 2000-49151)')
+        ipaddr_text.configure(text='Enter IP Address of Host')
+        port_text.configure(text='Enter Port of Host')
         file_button.configure(text="Select File")
+        file_button.configure(width=75)
         file_button.grid_forget()
-        file_button.configure(width=100)
-        file_button.grid(row=4,column=0,columnspan=9,pady=2,sticky='w')
-        selectfolder_button.grid(row=4,column=4,columnspan=6,pady=2,sticky='w',padx=30)
-        stream_button.grid(row=4,column=0,columnspan=9,pady=2,sticky='e')
+        file_button.grid(row=4,column=0,columnspan=9,pady=2,sticky='w',padx=0)
+        selectfolder_button.grid(row=4,column=0,columnspan=9,pady=2,sticky='e',padx=0)
+        stream_button.grid(row=4,column=4,columnspan=6,pady=2,sticky='w',padx=10)
         file_status.grid_forget()
         sendfile_button.grid(row=6,column=0,columnspan=9,pady=2)
         skt=socket.socket()
@@ -636,7 +638,7 @@ def dropdown_check(value):
         file_button.grid_forget()
         file_button.grid(row=4,column=0,columnspan=9,pady=2)
         file_button.configure(width=200)
-        port_text.configure(text='Port\n(Value between 2000-49151)')
+        port_text.configure(text='Port\nRange :- 2000 to 49151')
         sendfile_button.grid_forget()
         stream_button.grid_forget()
         selectfolder_button.grid_forget()
@@ -688,12 +690,12 @@ ipaddr_text=tk.CTkLabel(base,text='')
 port_text=tk.CTkLabel(base,text='')
 filename_var=tk.StringVar(value='Select User Type')
 filename_text=tk.CTkLabel(base,textvariable=filename_var,wraplength=400)
-file_button=tk.CTkButton(base,text='',state='disabled',width=100)
+file_button=tk.CTkButton(base,text='',state='disabled',width=75)
 file_status=tk.CTkLabel(base,text='Status: ')
 sendfile_button=tk.CTkButton(base,text='Send',state='disabled')
-selectfolder_button=tk.CTkButton(base,text='Select Folder',state='disabled',width=100)
+selectfolder_button=tk.CTkButton(base,text='Select Folder',state='disabled',width=75)
 disconnect_button=tk.CTkButton(base,text='Disconnect',state='disabled')
-stream_button=tk.CTkButton(base,text='Stream',state='disabled',width=100)
+stream_button=tk.CTkButton(base,text='Stream',state='disabled',width=75)
 # Placing Elements
 dropdown.grid(row=0,column=0,columnspan=10)
 ipaddr_text.grid(row=1,column=0,columnspan=8)
@@ -853,11 +855,11 @@ def connect():
         popup_attemptconnection.resizable(False,False)
         popup_attemptconnection.title("Connection")
         popup_attemptconnection.geometry("+%d+%d" %(base.winfo_x(),base.winfo_y()))
-        popup_attemptconnection.minsize(width=300,height=100)
-        popup_attemptconnection.columnconfigure(index=0,minsize=100)
-        popup_attemptconnection.rowconfigure(index=0,minsize=300)
+        popup_attemptconnection.maxsize(width=300,height=100)
+        popup_attemptconnection.columnconfigure(index=0,minsize=300)
+        popup_attemptconnection.rowconfigure(index=0,minsize=100)
         connecting_label=tk.CTkLabel(popup_attemptconnection,text="",justify='center')
-        connecting_label.pack()
+        connecting_label.grid(row=0,column=0,stick="nsew")
         popup_attemptconnection.grab_set()
         client_connection_thread=th.Thread(target=client_connection,args=(connecting_label,popup_attemptconnection,))
         client_connection_thread.start()
@@ -1066,7 +1068,7 @@ def number_check(value):
 number_validate=base.register(number_check)
 def streamcallback(*args):
     global video_stream_res_x_entry,video_stream_res_y_entry,video_stream_res_x_var,video_stream_res_y_var
-    if mic_stream_var.get() or system_audio_stream_var.get():
+    if mic_stream_var.get() or system_audio_stream_var.get() or video_stream_var.get():
         if (video_stream_var.get() and video_stream_res_y_var.get() and video_stream_res_x_var.get() and int(video_stream_res_y_var.get())>=720 and int(video_stream_res_y_var.get())<=max_y_res and int(video_stream_res_x_var.get())>=1024 and int(video_stream_res_x_var.get())<=max_x_res):
             start_stream_button.configure(state="normal")
         elif not video_stream_var.get():
@@ -1098,12 +1100,11 @@ def stream(data=None):
     stream_popup.geometry("+%d+%d" %(base.winfo_x(),base.winfo_y()))
     stream_label=tk.CTkLabel(stream_popup,text="",justify="center")
     if dropdown_var.get()!="Client(Send File)":
-        stream_popup.protocol("WM_DELETE_WINDOW",donothing)
+        stream_popup.protocol("WM_DELETE_WINDOW",rejectstream)
         video_stream_var_recv=False
         mic_stream_var_recv=False
         system_audio_stream_var_recv=False
-        stream_label.grid(row=0,column=0,columnspan=2,pady=10)
-        stream_popup.minsize(300,100)
+        stream_popup.maxsize(300,100)
         stream_popup.rowconfigure(0,minsize=50)
         stream_popup.rowconfigure(1,minsize=50)
         stream_popup.columnconfigure(0,minsize=150)
@@ -1125,10 +1126,11 @@ def stream(data=None):
             received_rate=float(data[tempvariable+1:len(data)-3])
         stream_label_string+=")?"
         stream_label.configure(text=stream_label_string)
+        stream_label.grid(row=0,column=0,columnspan=2,pady=10)
         stream_accept_button=tk.CTkButton(stream_popup,text="Accept",command=acceptstream)
-        stream_accept_button.grid(row=1,column=0,sticky="nsew")
+        stream_accept_button.grid(row=1,column=0)
         stream_reject_button=tk.CTkButton(stream_popup,text="Reject",command=rejectstream)
-        stream_reject_button.grid(row=1,column=1,sticky="nsew")
+        stream_reject_button.grid(row=1,column=1)
     else:
         stream_popup.minsize(300,200)
         stream_popup.rowconfigure(0,minsize=50)
@@ -1137,7 +1139,7 @@ def stream(data=None):
         stream_popup.rowconfigure(3,minsize=50)
         video_stream_res_x_entry=tk.CTkEntry(stream_popup,textvariable=video_stream_res_x_var,placeholder_text="X-Res",validate="all",validatecommand=(number_validate,'%P'))
         video_stream_res_y_entry=tk.CTkEntry(stream_popup,textvariable=video_stream_res_y_var,placeholder_text="Y-Res",validate="all",validatecommand=(number_validate,'%P'))
-        video_stream_label=tk.CTkLabel(stream_popup,text="X-Res (1024-"+str(max_x_res)+")\nY-Res (720-"+str(max_y_res)+")")
+        video_stream_label=tk.CTkLabel(stream_popup,text="         Ranges\nX-Res (1024-"+str(max_x_res)+")\nY-Res (720-"+str(max_y_res)+")")
         video_stream_res_x_label=tk.CTkLabel(stream_popup,text="X-Res")
         video_stream_res_y_label=tk.CTkLabel(stream_popup,text="Y-Res")
         stream_popup.columnconfigure(0,minsize=100)
