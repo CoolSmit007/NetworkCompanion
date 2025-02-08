@@ -12,6 +12,11 @@ import shutil
 from vidstream import AudioReceiver,AudioSender,ScreenShareClient,StreamingServer
 import pyaudiowpatch
 from screeninfo import get_monitors
+from pynput import mouse
+from pynput import keyboard
+import json
+from pynput.mouse import Controller as MouseController, Button as MouseButton
+from pynput.keyboard import Controller as KeyboardController, Key
 def donothing():
     pass
 def destroy(window):
@@ -55,14 +60,33 @@ stop_stream_button=None
 video_stream_check=None
 mic_stream_check=None
 system_audio_stream_check=None
+system_mouse_stream_check=None
+system_keyboard_stream_check=None
 video_stream_var=tk.IntVar(value=0)
 mic_stream_var=tk.IntVar(value=0)
 system_audio_stream_var=tk.IntVar(value=0)
+system_mouse_stream_var=tk.IntVar(value=0)
+system_keyboard_stream_var=tk.IntVar(value=0)
 video_stream_var_recv=False
 mic_stream_var_recv=False
 system_audio_stream_var_recv=False
+system_mouse_stream_var_recv=False
+system_keyboard_stream_var_recv=False
 video_stream_sender=None
 mic_audio_stream_sender=None
+mouse_stream_controller = MouseController()
+mouse_stream_listener=None
+mouse_stream_sender_socket=None
+mouse_stream_receive_server=None
+mouse_stream_receive_socket=None
+mouse_thread=None
+keyboard_stream_controller = KeyboardController()
+keyboard_stream=None
+keyboard_stream_listener=None
+keyboard_stream_sender_socket=None
+keyboard_stream_receive_server=None
+keyboard_stream_receive_socket=None
+keyboard_thread=None
 system_audio_stream_sender_thread=None
 video_stream_reciever=None
 mic_audio_stream_reciever=None
@@ -103,6 +127,135 @@ def send_system_audio(in_data, frame_count, time_info, status):
     except ConnectionResetError:
         stop_system_audio_event.set()
     return (in_data,pyaudiowpatch.paContinue)
+
+def send_mouse_keyboard_data(event_type, data):
+    global mouse_stream_sender_socket
+    event = {"type": event_type, **data}
+    select.select([],[mouse_stream_sender_socket.fileno()],[])
+    mouse_stream_sender_socket.sendall((json.dumps(event) + "\n").encode())
+
+def mouse_on_move(x, y):
+    send_mouse_keyboard_data("mouse_move", {"x": x, "y": y})
+
+def mouse_on_click(x, y, button, pressed):
+    send_mouse_keyboard_data("mouse_click", {"x": x, "y": y, "button": str(button), "pressed": pressed})
+    
+def keyboard_on_press(key):
+    try:
+        send_mouse_keyboard_data("key_press", {"key": key.char})
+    except AttributeError:
+        send_mouse_keyboard_data("key_press", {"key": str(key)})
+
+def keyboard_on_release(key):
+    try:
+        send_mouse_keyboard_data("key_release", {"key": key.char})
+    except AttributeError:
+        send_mouse_keyboard_data("key_release", {"key": str(key)})
+        
+def start_sender_mouse_stream():
+    global mouse_stream_sender_socket, mouse_stream_listener
+    mouse_stream_sender_socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+    mouse_stream_sender_socket.connect((ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),1900))
+    mouse_stream_listener = mouse.Listener(on_move=mouse_on_move, on_click=mouse_on_click)
+    mouse_stream_listener.start()
+    
+def start_receive_mouse_stream():
+    global mouse_stream_receive_server,mouse_stream_receive_socket,mouse_thread
+    mouse_stream_receive_server = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+    mouse_stream_receive_server.bind((ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),1900))
+    mouse_stream_receive_server.listen(1)
+    try:
+        mouse_stream_receive_socket, incoming_addr=mouse_stream_receive_server.accept()
+        mouse_thread=th.Thread(target=receive_mouse, args=())
+        mouse_thread.start()
+    except OSError:
+        return
+    
+def receive_mouse():
+    global mouse_stream_receive_socket,mouse_stream_controller, system_mouse_stream_var, mouse_stream_receive_server
+    while system_mouse_stream_var.get():
+        try:
+            select.select([mouse_stream_receive_socket.fileno()],[],[])
+            recieve_data=mouse_stream_receive_socket.recv(1024)
+            if not recieve_data:
+                return
+            events = recieve_data.decode().strip().split("\n")
+            for event in events:
+                event_data = json.loads(event)
+                print(event_data)
+                continue
+                if event_data["type"] == "mouse_move":
+                    mouse_stream_controller.position = (event_data["x"], event_data["y"])
+
+                elif event_data["type"] == "mouse_click":
+                    btn = MouseButton.left if event_data["button"] == "Button.left" else MouseButton.right
+                    if event_data["pressed"]:
+                        mouse_stream_controller.press(btn)
+                    else:
+                        mouse_stream_controller.release(btn)
+        except ValueError:
+            # print("ValueError")
+            continue
+        except OSError:
+            # print("OSError")
+            continue
+    mouse_stream_receive_socket.close()
+    mouse_stream_receive_server.close()
+
+def start_sender_keyboard_stream():
+    global keyboard_stream_sender_socket, keyboard_stream_listener
+    keyboard_stream_sender_socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+    keyboard_stream_sender_socket.connect((ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),2000))
+    keyboard_stream_listener = keyboard.Listener(on_press=keyboard_on_press, on_release=keyboard_on_release)
+    keyboard_stream_listener.start()
+    
+def start_receive_keyboard_stream():
+    global keyboard_stream_receive_server,keyboard_stream_receive_socket,keyboard_thread
+    keyboard_stream_receive_server = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+    keyboard_stream_receive_server.bind((ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),2000))
+    keyboard_stream_receive_server.listen(1)
+    try:
+        keyboard_stream_receive_socket, incoming_addr=mouse_stream_receive_server.accept()
+        keyboard_thread=th.Thread(target=receive_keyboard, args=())
+        keyboard_thread.start()
+    except OSError:
+        return
+        
+def receive_keyboard():
+    global keyboard_stream_receive_socket,keyboard_stream_controller, system_keyboard_stream_var, keyboard_stream_receive_server
+    while system_keyboard_stream_var.get():
+        try:
+            select.select([keyboard_stream_receive_socket.fileno()],[],[])
+            recieve_data=keyboard_stream_receive_socket.recv(1024)
+            if not recieve_data:
+                return
+            events = recieve_data.decode().strip().split("\n")
+            for event in events:
+                event_data = json.loads(event)
+                print(event_data)
+                continue
+                if event_data["type"] == "key_press":
+                    key = event_data["key"]
+                    if len(key) > 1 and hasattr(Key, key.replace("'", "")):  
+                        keyboard_stream_controller.press(getattr(Key, key.replace("'", "")))
+                    else:
+                        keyboard_stream_controller.press(key)
+
+                elif event_data["type"] == "key_release":
+                    key = event_data["key"]
+                    if len(key) > 1 and hasattr(Key, key.replace("'", "")):  
+                        keyboard_stream_controller.release(getattr(Key, key.replace("'", "")))
+                    else:
+                        keyboard_stream_controller.release(key)
+        except ValueError:
+            # print("ValueError")
+            continue
+        except OSError:
+            # print("OSError")
+            continue
+    keyboard_stream_receive_socket.close()
+    keyboard_stream_receive_server.close()
+        
 def system_audio_sender():
     global default_speakers,streaming_var,system_audio_stream,system_audio_socket
     connectionestablished=False
@@ -132,6 +285,12 @@ def client_streaming():
         stop_system_audio_event.clear()
         system_audio_stream_sender_thread=th.Thread(target=system_audio_sender,args=())
         system_audio_stream_sender_thread.start()
+    if system_mouse_stream_var.get():
+        temp_thread_mouse = th.Thread(target=start_receive_mouse_stream,args=())
+        temp_thread_mouse.start()
+    if system_keyboard_stream_var.get():
+        temp_thread_keyboard = th.Thread(target=start_receive_keyboard_stream,args=())
+        temp_thread_keyboard.start()
 def host_streaming():
     global video_stream_reciever,mic_audio_stream_reciever,system_audio_reciever,received_rate
     if video_stream_var_recv:
@@ -143,6 +302,10 @@ def host_streaming():
     if system_audio_stream_var_recv:
         system_audio_reciever=AudioReceiver(host=ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),port=1800,rate=int(received_rate))
         system_audio_reciever.start_server()
+    if system_mouse_stream_var_recv:
+        start_sender_mouse_stream()
+    if system_keyboard_stream_var_recv:
+        start_sender_keyboard_stream()      
 # File Send Function
 def file_send():    
     global file_send_progressbar,file_send_event,ack_counter_send,file_directory,folder_sending,file
@@ -1003,6 +1166,8 @@ def rejectstream():
         video_stream_check.configure(state="normal")
         mic_stream_check.configure(state="normal")
         system_audio_stream_check.configure(state="normal")
+        system_mouse_stream_check.configure(state="normal")
+        system_keyboard_stream_check.configure(state="normal")
         stream_popup.protocol("WM_DELETE_WINDOW",lambda: destroy(stream_popup))
     else:
         sending_queue.put("<<REJECTSTREAM>>".encode())
@@ -1010,6 +1175,9 @@ def rejectstream():
         stream_popup.update()
 def stop_stream():
     global streaming_var,video_stream_sender,mic_audio_stream_sender,video_stream_reciever,mic_audio_stream_reciever,system_audio_reciever
+    global system_mouse_stream_var,system_keyboard_stream_var, system_mouse_stream_var_recv, system_keyboard_stream_var_recv
+    global mouse_stream_listener, keyboard_stream_listener, mouse_stream_receive_socket, mouse_stream_receive_server, mouse_stream_sender_socket
+    global keyboard_stream_receive_server, keyboard_stream_receive_socket, keyboard_stream_sender_socket
     if dropdown_var.get()=="Client(Send File)":
         if video_stream_var.get():
             video_stream_sender.stop_stream()
@@ -1017,11 +1185,17 @@ def stop_stream():
             mic_audio_stream_sender.stop_stream()
         if system_audio_stream_var.get():
             stop_system_audio_event.set()
+        if(system_mouse_stream_var.get()):
+            system_mouse_stream_var.set(0)
+        if(system_keyboard_stream_var.get()):
+            system_keyboard_stream_var.set(0)
         stream_popup.protocol("WM_DELETE_WINDOW",lambda: destroy(stream_popup))
         start_stream_button.configure(state="normal")
         video_stream_check.configure(state="normal")
         mic_stream_check.configure(state="normal")
         system_audio_stream_check.configure(state="normal")
+        system_mouse_stream_check.configure(state="normal")
+        system_keyboard_stream_check.configure(state="normal")
         stop_stream_button.configure(state="disabled")
         if streaming_var:
             streaming_var=False
@@ -1041,21 +1215,34 @@ def stop_stream():
             mic_audio_stream_reciever.stop_server()
         if system_audio_stream_var_recv:
             system_audio_reciever.stop_server()
+        if system_mouse_stream_var_recv:
+            mouse_stream_listener.stop()
+            mouse_stream_sender_socket.close()
+        if system_keyboard_stream_var_recv:
+            keyboard_stream_listener.stop()
+            keyboard_stream_sender_socket.close()
         stream_popup.destroy()
         stream_popup.update()
 def start_stream():
-    global video_stream_var,mic_stream_var,system_audio_stream_var,video_stream_check,mic_stream_check,system_audio_stream_check
+    global video_stream_var,mic_stream_var,system_audio_stream_var,video_stream_check,mic_stream_check,system_audio_stream_check, system_mouse_stream_check,system_keyboard_stream_check
+    global system_mouse_stream_var,system_keyboard_stream_var
     stream_popup.protocol("WM_DELETE_WINDOW",donothing)
     stream_label.configure(text="Waiting for Host to accept Stream.")
     start_stream_button.configure(state="disabled")
     video_stream_check.configure(state="disabled")
     mic_stream_check.configure(state="disabled")
     system_audio_stream_check.configure(state="disabled")
+    system_mouse_stream_check.configure(state="disabled")
+    system_keyboard_stream_check.configure(state="disabled")
     str1="<<REQUESTSTREAM>>"
     if video_stream_var.get():
         str1+="<<V>>"
     if mic_stream_var.get():
         str1+="<<M>>"
+    if system_mouse_stream_var.get():
+        str1+="<<T>>"
+    if system_keyboard_stream_var.get():
+        str1+="<<K>>"
     if system_audio_stream_var.get():
         str1+="<<S>>"
         str1+="<<<"+str(default_speakers["defaultSampleRate"])+">>>"
@@ -1078,11 +1265,11 @@ def streamcallback(*args):
     else:
         start_stream_button.configure(state="disabled")
     if video_stream_var.get():
-        video_stream_res_x_entry.grid(row=3,column=0)
-        video_stream_res_y_entry.grid(row=3,column=1)
-        video_stream_label.grid(row=3,column=2,rowspan=2)
-        video_stream_res_x_label.grid(row=4,column=0)
-        video_stream_res_y_label.grid(row=4,column=1)
+        video_stream_res_x_entry.grid(row=4,column=0)
+        video_stream_res_y_entry.grid(row=4,column=1)
+        video_stream_label.grid(row=4,column=2,rowspan=2)
+        video_stream_res_x_label.grid(row=5,column=0)
+        video_stream_res_y_label.grid(row=5,column=1)
     else:
         video_stream_res_x_entry.grid_forget()
         video_stream_res_y_entry.grid_forget()
@@ -1093,6 +1280,8 @@ def stream(data=None):
     global base,stream_popup,stream_label,stream_accept_button,stream_reject_button,default_speakers,video_stream_var_recv,mic_stream_var_recv,system_audio_stream_var_recv
     global start_stream_button,stop_stream_button,video_stream_check,mic_stream_check,system_audio_stream_check,received_rate
     global video_stream_res_x_entry,video_stream_res_y_entry,video_stream_label,video_stream_res_x_label,video_stream_res_y_label
+    global system_keyboard_stream_check,system_mouse_stream_check,system_keyboard_stream_var,system_mouse_stream_var
+    global system_mouse_stream_var_recv,system_keyboard_stream_var_recv
     stream_popup=tk.CTkToplevel(base)
     stream_popup.resizable(False,False)
     stream_popup.title("Stream")
@@ -1104,7 +1293,7 @@ def stream(data=None):
         video_stream_var_recv=False
         mic_stream_var_recv=False
         system_audio_stream_var_recv=False
-        stream_popup.maxsize(300,100)
+        stream_popup.maxsize(500,100)
         stream_popup.rowconfigure(0,minsize=50)
         stream_popup.rowconfigure(1,minsize=50)
         stream_popup.columnconfigure(0,minsize=150)
@@ -1119,6 +1308,14 @@ def stream(data=None):
             stream_label_string+=",Mic Audio"
             tempvariable+=5
             mic_stream_var_recv=True
+        if len(data)>tempvariable and data[tempvariable]=="T":
+            stream_label_string+=",Control Mouse"
+            tempvariable+=5
+            system_mouse_stream_var_recv=True
+        if len(data)>tempvariable and data[tempvariable]=="K":
+            stream_label_string+=",Control Keyboard"
+            tempvariable+=5
+            system_keyboard_stream_var_recv=True
         if len(data)>tempvariable and data[tempvariable]=='S':
             stream_label_string+=",System Audio"
             tempvariable+=5
@@ -1132,11 +1329,12 @@ def stream(data=None):
         stream_reject_button=tk.CTkButton(stream_popup,text="Reject",command=rejectstream)
         stream_reject_button.grid(row=1,column=1)
     else:
-        stream_popup.minsize(300,200)
+        stream_popup.minsize(300,250)
         stream_popup.rowconfigure(0,minsize=50)
         stream_popup.rowconfigure(1,minsize=50)
         stream_popup.rowconfigure(2,minsize=50)
         stream_popup.rowconfigure(3,minsize=50)
+        stream_popup.rowconfigure(4,minsize=50)
         video_stream_res_x_entry=tk.CTkEntry(stream_popup,textvariable=video_stream_res_x_var,placeholder_text="X-Res",validate="all",validatecommand=(number_validate,'%P'))
         video_stream_res_y_entry=tk.CTkEntry(stream_popup,textvariable=video_stream_res_y_var,placeholder_text="Y-Res",validate="all",validatecommand=(number_validate,'%P'))
         video_stream_label=tk.CTkLabel(stream_popup,text="         Ranges\nX-Res (1024-"+str(max_x_res)+")\nY-Res (720-"+str(max_y_res)+")")
@@ -1145,11 +1343,13 @@ def stream(data=None):
         stream_popup.columnconfigure(0,minsize=100)
         stream_popup.columnconfigure(1,minsize=100)
         stream_popup.columnconfigure(2,minsize=100)
+        # stream_popup.columnconfigure(3,minsize=100)
+        # stream_popup.columnconfigure(4,minsize=100)
         stream_label.configure(text="Confirm Settings")
         start_stream_button=tk.CTkButton(stream_popup,text="Start Stream",command=start_stream,state='disabled')
-        start_stream_button.grid(row=2,column=0,columnspan=1)
+        start_stream_button.grid(row=3,column=0,columnspan=1)
         stop_stream_button=tk.CTkButton(stream_popup,text="Stop Stream",command=stop_stream,state='disabled')
-        stop_stream_button.grid(row=2,column=2,columnspan=1)
+        stop_stream_button.grid(row=3,column=2,columnspan=1)
         video_stream_var.set(0)
         mic_stream_var.set(0)
         system_audio_stream_var.set(0)
@@ -1160,6 +1360,10 @@ def stream(data=None):
         mic_stream_check.grid(row=1,column=1)
         system_audio_stream_check=tk.CTkCheckBox(stream_popup,text="System Audio",variable=system_audio_stream_var,state="disabled")
         system_audio_stream_check.grid(row=1,column=2)
+        system_keyboard_stream_check=tk.CTkCheckBox(stream_popup,text="Allow Keyboard Control",variable=system_keyboard_stream_var)
+        system_keyboard_stream_check.grid(row=2,column=0)
+        system_mouse_stream_check=tk.CTkCheckBox(stream_popup,text="Allow Mouse Control",variable=system_mouse_stream_var)
+        system_mouse_stream_check.grid(row=2,column=2)
         try:
             wasapi_info = pyaudiowpatch.PyAudio().get_host_api_info_by_type(pyaudiowpatch.paWASAPI)
         except OSError:
