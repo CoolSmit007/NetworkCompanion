@@ -130,33 +130,40 @@ def send_system_audio(in_data, frame_count, time_info, status):
     return (in_data,pyaudiowpatch.paContinue)
 
 def send_mouse_keyboard_data(event_type, data):
-    global mouse_stream_sender_socket
+    global mouse_stream_sender_socket, keyboard_stream_sender_socket
     event = {"type": event_type, **data}
-    select.select([],[mouse_stream_sender_socket.fileno()],[])
-    mouse_stream_sender_socket.sendall((json.dumps(event) + "\n").encode())
+    if(event_type == "key_press" or event_type=="key_release"):
+        print("sending keyboard",event)
+        select.select([],[keyboard_stream_sender_socket.fileno()],[])
+        keyboard_stream_sender_socket.sendall((json.dumps(event) + "\n").encode())
+    else:
+        select.select([],[mouse_stream_sender_socket.fileno()],[])
+        mouse_stream_sender_socket.sendall((json.dumps(event) + "\n").encode())
 
 def mouse_on_move(x, y):
-    send_mouse_keyboard_data("mouse_move", {"x": x, "y": y})
+    th.Thread(target=send_mouse_keyboard_data, args=("mouse_move", {"x": x, "y": y})).start()
 
 def mouse_on_click(x, y, button, pressed):
-    send_mouse_keyboard_data("mouse_click", {"x": x, "y": y, "button": str(button), "pressed": pressed})
+    th.Thread(target=send_mouse_keyboard_data, args=("mouse_click", {"x": x, "y": y, "button": str(button), "pressed": pressed})).start()
     
 def keyboard_on_press(key):
     try:
-        send_mouse_keyboard_data("key_press", {"key": key.char})
+        if key.char:
+            th.Thread(target=send_mouse_keyboard_data, args=("key_press", {"key": key.char})).start()
     except AttributeError:
-        send_mouse_keyboard_data("key_press", {"key": str(key)})
+        th.Thread(target=send_mouse_keyboard_data, args=("key_press", {"key": str(key)})).start()
 
 def keyboard_on_release(key):
     try:
-        send_mouse_keyboard_data("key_release", {"key": key.char})
+        if key.char:
+            th.Thread(target=send_mouse_keyboard_data, args=("key_release", {"key": key.char})).start()
     except AttributeError:
-        send_mouse_keyboard_data("key_release", {"key": str(key)})
+        th.Thread(target=send_mouse_keyboard_data, args=("key_release", {"key": str(key)})).start()
         
 def start_sender_mouse_stream():
     global mouse_stream_sender_socket, mouse_stream_listener
     mouse_stream_sender_socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-    mouse_stream_sender_socket.connect((incoming_address,1900))
+    mouse_stream_sender_socket.connect((incoming_address,int(1900)))
     mouse_stream_listener = mouse.Listener(on_move=mouse_on_move, on_click=mouse_on_click)
     mouse_stream_listener.start()
     
@@ -206,7 +213,7 @@ def receive_mouse():
 def start_sender_keyboard_stream():
     global keyboard_stream_sender_socket, keyboard_stream_listener
     keyboard_stream_sender_socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-    keyboard_stream_sender_socket.connect((incoming_address,2000))
+    keyboard_stream_sender_socket.connect((incoming_address,int(2000)))
     keyboard_stream_listener = keyboard.Listener(on_press=keyboard_on_press, on_release=keyboard_on_release)
     keyboard_stream_listener.start()
     
@@ -216,7 +223,7 @@ def start_receive_keyboard_stream():
     keyboard_stream_receive_server.bind(('',2000))
     keyboard_stream_receive_server.listen(1)
     try:
-        keyboard_stream_receive_socket, incoming_addr=mouse_stream_receive_server.accept()
+        keyboard_stream_receive_socket, incoming_addr=keyboard_stream_receive_server.accept()
         keyboard_thread=th.Thread(target=receive_keyboard, args=())
         keyboard_thread.start()
     except OSError:
@@ -1002,7 +1009,7 @@ def host_connection(pendingconnection_label,acceptconn_butt,rejectconn_butt):
     except OSError:
         return
     pendingconnection_label.configure(text='Accept Connection from'+str(incoming_addr).split(",")[0]+')?')
-    incoming_address=str(incoming_addr).split(",")[0][1:]
+    incoming_address=str(incoming_addr).split(",")[0][1:][1:-1]
     acceptconn_butt.configure(state="normal")
     rejectconn_butt.configure(state="normal")
 def connect():
