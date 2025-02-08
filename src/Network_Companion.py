@@ -190,8 +190,8 @@ def receive_mouse():
             events = recieve_data.decode().strip().split("\n")
             for event in events:
                 event_data = json.loads(event)
-                print(event_data)
-                continue
+                # print(event_data)
+                # continue
                 if event_data["type"] == "mouse_move":
                     mouse_stream_controller.position = (event_data["x"], event_data["y"])
 
@@ -240,8 +240,8 @@ def receive_keyboard():
             events = recieve_data.decode().strip().split("\n")
             for event in events:
                 event_data = json.loads(event)
-                print(event_data)
-                continue
+                # print(event_data)
+                # continue
                 if event_data["type"] == "key_press":
                     key = event_data["key"]
                     if len(key) > 1 and hasattr(Key, key.replace("'", "")):  
