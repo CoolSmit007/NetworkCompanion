@@ -117,6 +117,7 @@ video_stream_res_y_entry=None
 video_stream_res_x_label=None
 video_stream_res_y_label=None
 video_stream_label=None
+incoming_address=None
 # Streaming Functions
 def send_system_audio(in_data, frame_count, time_info, status):
     global system_audio_socket
@@ -155,14 +156,14 @@ def keyboard_on_release(key):
 def start_sender_mouse_stream():
     global mouse_stream_sender_socket, mouse_stream_listener
     mouse_stream_sender_socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-    mouse_stream_sender_socket.connect((ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),1900))
+    mouse_stream_sender_socket.connect((incoming_address,1900))
     mouse_stream_listener = mouse.Listener(on_move=mouse_on_move, on_click=mouse_on_click)
     mouse_stream_listener.start()
     
 def start_receive_mouse_stream():
     global mouse_stream_receive_server,mouse_stream_receive_socket,mouse_thread
     mouse_stream_receive_server = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-    mouse_stream_receive_server.bind((ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),1900))
+    mouse_stream_receive_server.bind(('',1900))
     mouse_stream_receive_server.listen(1)
     try:
         mouse_stream_receive_socket, incoming_addr=mouse_stream_receive_server.accept()
@@ -205,14 +206,15 @@ def receive_mouse():
 def start_sender_keyboard_stream():
     global keyboard_stream_sender_socket, keyboard_stream_listener
     keyboard_stream_sender_socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-    keyboard_stream_sender_socket.connect((ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),2000))
+    keyboard_stream_sender_socket.connect((incoming_address,2000))
     keyboard_stream_listener = keyboard.Listener(on_press=keyboard_on_press, on_release=keyboard_on_release)
     keyboard_stream_listener.start()
     
 def start_receive_keyboard_stream():
     global keyboard_stream_receive_server,keyboard_stream_receive_socket,keyboard_thread
     keyboard_stream_receive_server = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-    keyboard_stream_receive_server.bind((ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),2000))
+    print((ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),2000))
+    keyboard_stream_receive_server.bind(('',2000))
     keyboard_stream_receive_server.listen(1)
     try:
         keyboard_stream_receive_socket, incoming_addr=mouse_stream_receive_server.accept()
@@ -995,12 +997,13 @@ def rejectconn(popup_waitconnection):
     return
 
 def host_connection(pendingconnection_label,acceptconn_butt,rejectconn_butt):
-    global serverskt,skt
+    global serverskt,skt, incoming_address
     try:
         skt, incoming_addr=serverskt.accept()
     except OSError:
         return
     pendingconnection_label.configure(text='Accept Connection from'+str(incoming_addr).split(",")[0]+')?')
+    incoming_address=str(incoming_addr).split(",")[0]
     acceptconn_butt.configure(state="normal")
     rejectconn_butt.configure(state="normal")
 def connect():
