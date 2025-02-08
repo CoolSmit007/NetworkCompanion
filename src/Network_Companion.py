@@ -213,7 +213,6 @@ def start_sender_keyboard_stream():
 def start_receive_keyboard_stream():
     global keyboard_stream_receive_server,keyboard_stream_receive_socket,keyboard_thread
     keyboard_stream_receive_server = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-    print((ip1_var.get()+'.'+ip2_var.get()+'.'+ip3_var.get()+'.'+ip4_var.get(),2000))
     keyboard_stream_receive_server.bind(('',2000))
     keyboard_stream_receive_server.listen(1)
     try:
@@ -1003,7 +1002,7 @@ def host_connection(pendingconnection_label,acceptconn_butt,rejectconn_butt):
     except OSError:
         return
     pendingconnection_label.configure(text='Accept Connection from'+str(incoming_addr).split(",")[0]+')?')
-    incoming_address=str(incoming_addr).split(",")[0]
+    incoming_address=str(incoming_addr).split(",")[0][1:]
     acceptconn_butt.configure(state="normal")
     rejectconn_butt.configure(state="normal")
 def connect():
