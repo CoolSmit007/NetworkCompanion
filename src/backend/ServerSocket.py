@@ -4,28 +4,28 @@ import logging
 import threading as th
 
 class serverSocketClass:
-    logger = logging.getLogger()
-    waitingConnectionLock = th.Event()
+    __logger = logging.getLogger()
+    __waitingConnectionLock = th.Event()
     waitingConnectionThread = None
     
     def __init__(self):
         self.serverSocket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         self.serverSocket.settimeout(60.0)
-        self.waitingConnectionLock.set()
+        self.__waitingConnectionLock.set()
         
     def listen(self,ip,port):
         self.serverSocket.bind((ip,port))
         self.serverSocket.listen(1)
-        self.waitingConnectionLock.set()
+        self.__waitingConnectionLock.set()
         
     def awaitConnection(self,callbackFunction):
-        while self.waitingConnectionLock.is_set():
+        while self.__waitingConnectionLock.is_set():
             try:
                 skt, incoming_addr=self.serverSocket.accept()
                 skt.setblocking(True)
                 callbackFunction(socketClass(skt,incoming_addr[0],incoming_addr[1]))
             except OSError as error:
-                self.logger.error("Os error occured while waiting for connection %s",str(error))
+                self.__logger.error("Os error occured while waiting for connection %s",str(error))
                 return
             except TimeoutError:
                 pass
@@ -35,5 +35,5 @@ class serverSocketClass:
         self.waitingConnectionThread.start()
         
     def closeSocket(self):
-        self.waitingConnectionLock.clear()
+        self.__waitingConnectionLock.clear()
         self.serverSocket.close()
