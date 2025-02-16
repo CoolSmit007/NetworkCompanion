@@ -26,12 +26,13 @@ class serverSocketClass:
                 callbackFunction(socketClass(skt,incoming_addr[0],incoming_addr[1]))
             except OSError as error:
                 self.logger.error("Os error occured while waiting for connection %s",str(error))
-                return False
+                return
             except TimeoutError:
                 pass
             
     def startWaitingConnectionThread(self,callbackFunction):
         self.waitingConnectionThread = th.Thread(target=self.awaitConnection,args=(callbackFunction))
+        self.waitingConnectionThread.start()
         
     def closeSocket(self):
         self.waitingConnectionLock.clear()

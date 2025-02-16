@@ -1,6 +1,6 @@
 import socket
 import select
-from collections import deque
+import queue
 import logging
 import threading as th
 class socketClass:
@@ -13,7 +13,7 @@ class socketClass:
         self.socket = socketObject if socketObject!=None else socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         self.ip=ip
         self.port=port
-        self.receiveQueue = deque()
+        self.receiveQueue = queue.Queue()
         self.receiveLock.set()
         
     @staticmethod
@@ -22,7 +22,7 @@ class socketClass:
         s.connect(("8.8.8.8", 80))
         ans=s.getsockname()
         s.close()
-        return ans
+        return ans[0]
 
     def sendData(self,data):
         select.select([],[self.socket.fileno()],[])
@@ -36,7 +36,7 @@ class socketClass:
                 if not recieve_data:
                     self.closeSocket()
                     return
-                self.receiveQueue.append(recieve_data)
+                self.receiveQueue.put(recieve_data)
             except ValueError as error:
                 self.logger.error("Value error while receiving data: %s",str(error))
             except OSError as error:
@@ -58,7 +58,7 @@ class socketClass:
            
     def startReceiveThread(self):
         self.receiveThread=th.Thread(target=self.receiveData)
-        
+        self.receiveThread.start()
     def closeSocket(self):
         self.receiveLock.clear()
         self.receiveThread.join(timeout=1000)
