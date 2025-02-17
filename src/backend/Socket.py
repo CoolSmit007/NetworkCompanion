@@ -36,8 +36,8 @@ class socketClass:
                 if ready:
                     recieve_data+=self.socket.recv(1024)
                     if not recieve_data:
-                        self.closeSocket()
-                        return
+                        self.__receiveLock.clear()
+                        continue
                     if(len(recieve_data)>=1024):
                         self.receiveQueue.put(recieve_data[:1024])
                         recieve_data=recieve_data[1024:]

@@ -32,7 +32,7 @@ class connection:
                 continue
             
             try:
-                decodedData = data.rstrip('\x00').decode()
+                decodedData = data.rstrip(b'\x00').decode()
             except UnicodeDecodeError as error:
                 LOGGER.error("Unicode Decode error %s",error)  
                 continue
@@ -71,7 +71,7 @@ class connection:
                 LOGGER.error("JSON final bytes length doesn't match data_length, data_length=%d, len of final bytes=%d",bytesDataLength,len(finalData))  
                 continue
             
-            if not all(bytesValue==b'\x00' for bytesValue in finalData[-paddedLength:]):
+            if not all(bytesValue==0 for bytesValue in finalData[-paddedLength:]):
                 LOGGER.error("Not all padded bytes are null bytes for padding_length=%d",paddedLength)  
                 continue
             
@@ -133,6 +133,7 @@ class connection:
             return
         LOGGER.info("Accepting connection from ip:%s and port %d:",socket.ip,socket.port)
         self.socket=socket 
+        self.socket.startReceiveThread()
         self.startReceiveThread()
         
     def startServer(self,ip,port,callbackFunction):

@@ -22,6 +22,7 @@ class serverSocketClass:
                 ready, _, _ = select.select([self.serverSocket], [], [], 1.0)
                 if ready:
                     skt, incoming_addr=self.serverSocket.accept()
+                    skt.setblocking(True)
                     callbackFunction(socketClass(skt,incoming_addr[0],incoming_addr[1]))
                     self.__waitingConnectionLock.clear()
             except OSError as error:
