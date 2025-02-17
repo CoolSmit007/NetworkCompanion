@@ -1,10 +1,10 @@
 import socket
 import select
 import queue
-import logging
 import threading as th
+
+from log_init import LOGGER
 class socketClass:
-    __logger = logging.getLogger()
     __receiveLock = th.Event()
     receiveThread = None
     ip=None
@@ -32,41 +32,49 @@ class socketClass:
         recieve_data=bytes()
         while self.__receiveLock.is_set():
             try:
-                select.select([self.socket.fileno()],[],[])
-                recieve_data+=self.socket.recv(1024)
-                if not recieve_data:
-                    self.closeSocket()
-                    return
-                if(len(recieve_data)>=1024):
-                    self.receiveQueue.put(recieve_data[:1024])
-                    recieve_data=recieve_data[1024:]
+                ready,_,_ = select.select([self.socket.fileno()],[],[],1.0)
+                if ready:
+                    recieve_data+=self.socket.recv(1024)
+                    if not recieve_data:
+                        self.closeSocket()
+                        return
+                    if(len(recieve_data)>=1024):
+                        self.receiveQueue.put(recieve_data[:1024])
+                        recieve_data=recieve_data[1024:]
             except ValueError as error:
-                self.__logger.error("Value error while receiving data: %s",str(error))
+                LOGGER.error("Value error while receiving data: %s",str(error))
             except OSError as error:
-                self.__logger.error("OS error while receiving data: %s",str(error))
+                LOGGER.error("OS error while receiving data: %s",str(error))
                 
+    def startReceiveThread(self):
+        self.__receiveLock.set()
+        self.receiveThread=th.Thread(target=self.receiveData)
+        self.receiveThread.start()
+        
+    def stopReceiveThread(self):
+        self.__receiveLock.clear()
+        if(self.receiveThread):
+            self.receiveThread.join(timeout=10.0)
+            if(self.receiveThread.is_alive()):
+                return False
+        return True
+    
     def connect(self,ip,port):
         try:
             self.socket.connect((ip,port))
             return True
         except ConnectionRefusedError as error:
-            self.__logger.error("Connection refused error: %s",str(error))
+            LOGGER.error("Connection refused error: %s",str(error))
             return False
         except TimeoutError as error:
-            self.__logger.error("Timeout error while trying to connect: %s",str(error))
+            LOGGER.error("Timeout error while trying to connect: %s",str(error))
             return False 
         except OSError as error:
-            self.__logger.error("OS error while trying to connect: %s",str(error))
+            LOGGER.error("OS error while trying to connect: %s",str(error))
             return False
-           
-    def startReceiveThread(self):
-        self.receiveThread=th.Thread(target=self.receiveData)
-        self.receiveThread.start()
         
     def closeSocket(self):
-        self.__receiveLock.clear()
-        self.receiveThread.join(timeout=1000)
-        if(self.receiveThread.is_alive()):
-            return False
-        self.socket.close()
-        return True
+        if(self.stopReceiveThread()):
+            self.socket.close()
+            return True
+        return False

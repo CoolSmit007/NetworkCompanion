@@ -1,39 +1,50 @@
-from Socket import socketClass
+from backend.Socket import socketClass
 import socket
-import logging
+from log_init import LOGGER
 import threading as th
+import select
 
 class serverSocketClass:
-    __logger = logging.getLogger()
     __waitingConnectionLock = th.Event()
     waitingConnectionThread = None
     
     def __init__(self):
         self.serverSocket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-        self.serverSocket.settimeout(60.0)
         self.__waitingConnectionLock.set()
         
     def listen(self,ip,port):
         self.serverSocket.bind((ip,port))
         self.serverSocket.listen(1)
-        self.__waitingConnectionLock.set()
         
     def awaitConnection(self,callbackFunction):
         while self.__waitingConnectionLock.is_set():
             try:
-                skt, incoming_addr=self.serverSocket.accept()
-                skt.setblocking(True)
-                callbackFunction(socketClass(skt,incoming_addr[0],incoming_addr[1]))
+                ready, _, _ = select.select([self.serverSocket], [], [], 1.0)
+                if ready:
+                    skt, incoming_addr=self.serverSocket.accept()
+                    callbackFunction(socketClass(skt,incoming_addr[0],incoming_addr[1]))
+                    self.__waitingConnectionLock.clear()
             except OSError as error:
-                self.__logger.error("Os error occured while waiting for connection %s",str(error))
+                LOGGER.error("Os error occured while waiting for connection %s",str(error))
                 return
             except TimeoutError:
                 pass
             
     def startWaitingConnectionThread(self,callbackFunction):
-        self.waitingConnectionThread = th.Thread(target=self.awaitConnection,args=(callbackFunction))
+        self.__waitingConnectionLock.set()
+        self.waitingConnectionThread = th.Thread(target=self.awaitConnection,args=(callbackFunction,))
         self.waitingConnectionThread.start()
         
-    def closeSocket(self):
+    def stopWaitingConnectionThread(self):
         self.__waitingConnectionLock.clear()
-        self.serverSocket.close()
+        if(self.waitingConnectionThread):
+            self.waitingConnectionThread.join(10.0)
+            if(self.waitingConnectionThread.is_alive()):
+                return False
+        return True
+        
+    def closeServer(self):
+        if(self.stopWaitingConnectionThread()):
+            self.serverSocket.close()
+            return True
+        return False

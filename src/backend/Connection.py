@@ -1,17 +1,15 @@
-from Socket import socketClass
-from ServerSocket import serverSocketClass
+from backend.Socket import socketClass
+from backend.ServerSocket import serverSocketClass
 from models.DataTypeEnum import DataType
 
 import queue
 import threading as th
-import logging
+from log_init import LOGGER
 import json
-import sys
 
 class connection:
-    __logger = logging.getLogger()
     __receiveLock = th.Event()
-    
+    receiveThread=None
     def __init__(self):
         self.socket = socketClass()
         self.server = serverSocketClass()
@@ -24,26 +22,29 @@ class connection:
         
     def receive(self):
         while self.__receiveLock.is_set():
-            data = self.socket.receiveQueue.get()
+            try:
+                data = self.socket.receiveQueue.get(timeout=1.0)
+            except queue.Empty:
+                continue
             
             if(not isinstance(data, bytes)):
-                self.__logger.error("Data is not a bytearray")  
+                LOGGER.error("Data is not a bytearray")  
                 continue
             
             try:
                 decodedData = data.rstrip('\x00').decode()
             except UnicodeDecodeError as error:
-                self.__logger.error("Unicode Decode error %s",error)  
+                LOGGER.error("Unicode Decode error %s",error)  
                 continue
             
             if(not decodedData[-1]=='\n'):
-                self.__logger.error("Data doesn't contain \\n as the last character")  
+                LOGGER.error("Data doesn't contain \\n as the last character")  
                 continue
             
             try:
                 jsonData = json.loads(decodedData[:-1])
             except json.JSONDecodeError as error:
-                self.__logger.error("JSON Decode error %s",error)  
+                LOGGER.error("JSON Decode error %s",error)  
                 continue
             
             bytesDataLength = jsonData.get("data_length")
@@ -51,15 +52,15 @@ class connection:
             typeOfData = jsonData.get("type")
             
             if not bytesDataLength:
-                self.__logger.error("No attribute 'data_length' found in JSON")  
+                LOGGER.error("No attribute 'data_length' found in JSON")  
                 continue
             
             if not paddedLength:
-                self.__logger.error("No attribute 'padded_length' found in JSON")  
+                LOGGER.error("No attribute 'padded_length' found in JSON")  
                 continue
             
             if not typeOfData:
-                self.__logger.error("No attribute 'type' found in JSON")  
+                LOGGER.error("No attribute 'type' found in JSON")  
                 continue
                 
             finalData=bytes()
@@ -67,11 +68,11 @@ class connection:
                 finalData += self.socket.receiveQueue.get()
                 
             if(bytesDataLength!=len(finalData)):
-                self.__logger.error("JSON final bytes length doesn't match data_length, data_length=%d, len of final bytes=%d",bytesDataLength,len(finalData))  
+                LOGGER.error("JSON final bytes length doesn't match data_length, data_length=%d, len of final bytes=%d",bytesDataLength,len(finalData))  
                 continue
             
             if not all(bytesValue==b'\x00' for bytesValue in finalData[-paddedLength:]):
-                self.__logger.error("Not all padded bytes are null bytes for padding_length=%d",paddedLength)  
+                LOGGER.error("Not all padded bytes are null bytes for padding_length=%d",paddedLength)  
                 continue
             
             finalData = finalData[:-paddedLength] if paddedLength > 0 else finalData
@@ -92,13 +93,26 @@ class connection:
                 case DataType.MOUSE.value:
                     self.mouseQueue.put(finalData)
             
+    def startReceiveThread(self):
+        self.__receiveLock.set()
+        self.receiveThread=th.Thread(target=self.receive)
+        self.receiveThread.start()
+        
+    def stopReceiveThread(self):
+        self.__receiveLock.clear()
+        if(self.receiveThread):
+            self.receiveThread.join(timeout=10.0)
+            if(self.receiveThread.is_alive()):
+                return False
+        return True
+    
     def send(self,type,data):
         if not isinstance(data,bytes):
-            self.__logger.error("Data is not of type bytes")  
+            LOGGER.error("Data is not of type bytes")  
             raise Exception("Data is not of type bytes")
         
         if not isinstance(type,DataType):
-            self.__logger.error("Type is not an enum of type DataType")  
+            LOGGER.error("Type is not an enum of type DataType")  
             raise Exception("Type is not an enum of type DataType")
         
         padLength = (1024-(len(data)%1024))%1024
@@ -108,4 +122,27 @@ class connection:
         self.socket.sendData(encodedJSONData)
         self.socket.sendData(paddedData)
             
-                
+    def connect(self,ip,port):
+        LOGGER.info("Connecting to ip:%s and port %d:",ip,port)
+        self.socket.connect(ip,port)
+        self.socket.startReceiveThread()
+    
+    def acceptConnectionAndStartReceiveThread(self,socket):
+        if not isinstance(socket,socketClass):
+            LOGGER.error("Socket variabled is of class %s instead of socketClass",str(type(socket)))
+            return
+        LOGGER.info("Accepting connection from ip:%s and port %d:",socket.ip,socket.port)
+        self.socket=socket 
+        self.startReceiveThread()
+        
+    def startServer(self,ip,port,callbackFunction):
+        LOGGER.info("Starting server bound to ip:%s and port %d:",ip,port)
+        self.server.listen(ip,port)
+        self.server.startWaitingConnectionThread(callbackFunction)
+        
+    def closeConnection(self):
+        if(self.stopReceiveThread()):
+            socketClosed =  self.socket.closeSocket()
+            serverClosed = self.server.closeServer()
+            return socketClosed and serverClosed
+        return False
