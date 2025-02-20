@@ -28,7 +28,7 @@ class socketClass:
         select.select([],[self.socket.fileno()],[])
         self.socket.sendall(data)
         
-    def receiveData(self):
+    def __receiveData(self):
         recieve_data=bytes()
         while self.__receiveLock.is_set():
             try:
@@ -48,7 +48,7 @@ class socketClass:
                 
     def startReceiveThread(self):
         self.__receiveLock.set()
-        self.receiveThread=th.Thread(target=self.receiveData)
+        self.receiveThread=th.Thread(target=self.__receiveData)
         self.receiveThread.start()
         
     def stopReceiveThread(self):

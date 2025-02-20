@@ -20,7 +20,7 @@ class connection:
         self.keyboardQueue = queue.Queue()
         self.mouseQueue = queue.Queue()
         
-    def receive(self):
+    def __receive(self):
         while self.__receiveLock.is_set():
             try:
                 data = self.socket.receiveQueue.get(timeout=1.0)
@@ -93,12 +93,12 @@ class connection:
                 case DataType.MOUSE.value:
                     self.mouseQueue.put(finalData)
             
-    def startReceiveThread(self):
+    def __startReceiveThread(self):
         self.__receiveLock.set()
-        self.receiveThread=th.Thread(target=self.receive)
+        self.receiveThread=th.Thread(target=self.__receive)
         self.receiveThread.start()
         
-    def stopReceiveThread(self):
+    def __stopReceiveThread(self):
         self.__receiveLock.clear()
         if(self.receiveThread):
             self.receiveThread.join(timeout=10.0)
@@ -126,6 +126,7 @@ class connection:
         LOGGER.info("Connecting to ip:%s and port %d:",ip,port)
         self.socket.connect(ip,port)
         self.socket.startReceiveThread()
+        self.__startReceiveThread()
     
     def acceptConnectionAndStartReceiveThread(self,socket):
         if not isinstance(socket,socketClass):
@@ -134,7 +135,7 @@ class connection:
         LOGGER.info("Accepting connection from ip:%s and port %d:",socket.ip,socket.port)
         self.socket=socket 
         self.socket.startReceiveThread()
-        self.startReceiveThread()
+        self.__startReceiveThread()
         
     def startServer(self,ip,port,callbackFunction):
         LOGGER.info("Starting server bound to ip:%s and port %d:",ip,port)
@@ -142,7 +143,7 @@ class connection:
         self.server.startWaitingConnectionThread(callbackFunction)
         
     def closeConnection(self):
-        if(self.stopReceiveThread()):
+        if(self.__stopReceiveThread()):
             socketClosed =  self.socket.closeSocket()
             serverClosed = self.server.closeServer()
             return socketClosed and serverClosed

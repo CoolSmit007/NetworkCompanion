@@ -16,7 +16,7 @@ class serverSocketClass:
         self.serverSocket.bind((ip,port))
         self.serverSocket.listen(1)
         
-    def awaitConnection(self,callbackFunction):
+    def __awaitConnection(self,callbackFunction):
         while self.__waitingConnectionLock.is_set():
             try:
                 ready, _, _ = select.select([self.serverSocket], [], [], 1.0)
@@ -33,7 +33,7 @@ class serverSocketClass:
             
     def startWaitingConnectionThread(self,callbackFunction):
         self.__waitingConnectionLock.set()
-        self.waitingConnectionThread = th.Thread(target=self.awaitConnection,args=(callbackFunction,))
+        self.waitingConnectionThread = th.Thread(target=self.__awaitConnection,args=(callbackFunction,))
         self.waitingConnectionThread.start()
         
     def stopWaitingConnectionThread(self):
